@@ -1,36 +1,38 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Timesheetz
 
-## Getting Started
+Timesheetz is a sleek, modern work hours and earnings tracker built with Next.js 16, TypeScript, and a Turso Database backend. It features a premium dark glassmorphism user interface, email/password authentication, and dynamic earnings calculations.
 
-First, run the development server:
+## Live 1-Click Deployment
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+Deploy your own instance of Timesheetz to Vercel in seconds:
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2FV3N0M357%2Ftimesheetz&env=TURSO_CONNECTION_URL,TURSO_AUTH_TOKEN,JWT_SECRET)
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+*During deployment, you will be prompted to supply the environment variables for your Turso Database connection.*
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+---
 
-## Learn More
+## Environment Configuration
 
-To learn more about Next.js, take a look at the following resources:
+To run the application, you need the following environment variables:
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+- `TURSO_CONNECTION_URL`: Your Turso connection URL (e.g. `libsql://your-db-username.turso.io`)
+- `TURSO_AUTH_TOKEN`: Your Turso database authorization token
+- `JWT_SECRET`: A secure random secret string (at least 32 characters) used to sign user session cookies
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+---
 
-## Deploy on Vercel
+## Local Development
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+1. **Install dependencies:**
+   ```bash
+   npm install
+   ```
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+2. **Run the development server:**
+   ```bash
+   npm run dev
+   ```
+   *By default, the local environment uses a file-based SQLite database (`local.db`) so you can test it immediately without setting up Turso.*
+
+3. Open [http://localhost:3000](http://localhost:3000) in your browser.
