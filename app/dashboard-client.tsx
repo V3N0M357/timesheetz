@@ -131,15 +131,15 @@ export default function DashboardClient({ userEmail, initialEntries }: Dashboard
       {/* Header Panel */}
       <header className="glass-panel animate-fade-in" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "1.5rem 2rem", marginBottom: "2rem" }}>
         <div>
-          <h1 style={{ fontSize: "1.5rem", fontWeight: "700", background: "linear-gradient(135deg, #a78bfa 0%, #06b6d4 100%)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>
+          <h1 style={{ fontSize: "1.25rem", fontWeight: "700", color: "var(--text-main)" }}>
             Timesheetz
           </h1>
           <p style={{ fontSize: "0.85rem", color: "var(--text-muted)", marginTop: "0.1rem" }}>
             Logged in as <span style={{ color: "var(--text-main)", fontWeight: "500" }}>{userEmail}</span>
           </p>
         </div>
-        <button className="btn btn-danger" onClick={handleLogout} disabled={isPending} style={{ padding: "0.6rem 1.2rem", fontSize: "0.85rem" }}>
-          <LogOut size={16} />
+        <button className="btn btn-danger" onClick={handleLogout} disabled={isPending} style={{ padding: "0.5rem 1rem", fontSize: "0.85rem" }}>
+          <LogOut size={14} />
           <span>Sign Out</span>
         </button>
       </header>
@@ -148,34 +148,34 @@ export default function DashboardClient({ userEmail, initialEntries }: Dashboard
       <section style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "1.5rem", marginBottom: "2rem" }}>
         {/* Earnings Card */}
         <div className="glass-panel animate-fade-in" style={{ padding: "1.5rem", display: "flex", alignItems: "center", gap: "1.25rem" }}>
-          <div style={{ padding: "1rem", borderRadius: "12px", background: "rgba(16, 185, 129, 0.1)", color: "var(--success)" }}>
-            <DollarSign size={28} />
+          <div style={{ padding: "0.75rem", borderRadius: "8px", background: "var(--success-bg)", color: "var(--success)" }}>
+            <DollarSign size={24} />
           </div>
           <div>
-            <p style={{ fontSize: "0.85rem", color: "var(--text-muted)", fontWeight: "600", textTransform: "uppercase" }}>Total Earnings</p>
-            <h2 style={{ fontSize: "2rem", fontWeight: "800", color: "#10b981", marginTop: "0.15rem" }}>{formatCurrency(totalEarnings)}</h2>
+            <p style={{ fontSize: "0.75rem", color: "var(--text-muted)", fontWeight: "600", textTransform: "uppercase", letterSpacing: "0.05em" }}>Total Earnings</p>
+            <h2 style={{ fontSize: "1.75rem", fontWeight: "700", color: "var(--success)", marginTop: "0.15rem" }}>{formatCurrency(totalEarnings)}</h2>
           </div>
         </div>
 
         {/* Hours Card */}
         <div className="glass-panel animate-fade-in" style={{ padding: "1.5rem", display: "flex", alignItems: "center", gap: "1.25rem" }}>
-          <div style={{ padding: "1rem", borderRadius: "12px", background: "rgba(139, 92, 246, 0.1)", color: "var(--primary)" }}>
-            <Clock size={28} />
+          <div style={{ padding: "0.75rem", borderRadius: "8px", background: "var(--primary-glow)", color: "var(--primary)" }}>
+            <Clock size={24} />
           </div>
           <div>
-            <p style={{ fontSize: "0.85rem", color: "var(--text-muted)", fontWeight: "600", textTransform: "uppercase" }}>Total Hours</p>
-            <h2 style={{ fontSize: "2rem", fontWeight: "800", color: "#a78bfa", marginTop: "0.15rem" }}>{totalHours.toFixed(1)} hrs</h2>
+            <p style={{ fontSize: "0.75rem", color: "var(--text-muted)", fontWeight: "600", textTransform: "uppercase", letterSpacing: "0.05em" }}>Total Hours</p>
+            <h2 style={{ fontSize: "1.75rem", fontWeight: "700", color: "var(--primary)", marginTop: "0.15rem" }}>{totalHours.toFixed(1)} hrs</h2>
           </div>
         </div>
 
         {/* Average Rate Card */}
         <div className="glass-panel animate-fade-in" style={{ padding: "1.5rem", display: "flex", alignItems: "center", gap: "1.25rem" }}>
-          <div style={{ padding: "1rem", borderRadius: "12px", background: "rgba(6, 182, 212, 0.1)", color: "var(--accent)" }}>
-            <TrendingUp size={28} />
+          <div style={{ padding: "0.75rem", borderRadius: "8px", background: "var(--accent-glow)", color: "var(--accent)" }}>
+            <TrendingUp size={24} />
           </div>
           <div>
-            <p style={{ fontSize: "0.85rem", color: "var(--text-muted)", fontWeight: "600", textTransform: "uppercase" }}>Average Rate</p>
-            <h2 style={{ fontSize: "2rem", fontWeight: "800", color: "#06b6d4", marginTop: "0.15rem" }}>{formatCurrency(averageHourlyRate)}<span style={{ fontSize: "0.9rem", fontWeight: "500", color: "var(--text-muted)" }}>/hr</span></h2>
+            <p style={{ fontSize: "0.75rem", color: "var(--text-muted)", fontWeight: "600", textTransform: "uppercase", letterSpacing: "0.05em" }}>Average Rate</p>
+            <h2 style={{ fontSize: "1.75rem", fontWeight: "700", color: "var(--accent)", marginTop: "0.15rem" }}>{formatCurrency(averageHourlyRate)}<span style={{ fontSize: "0.85rem", fontWeight: "500", color: "var(--text-muted)" }}>/hr</span></h2>
           </div>
         </div>
       </section>

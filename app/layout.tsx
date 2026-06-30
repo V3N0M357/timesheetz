@@ -20,9 +20,6 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={`${inter.variable}`}>
-        {/* Glowing visual blobs for premium dark UI */}
-        <div className="glow-blob blob-purple" />
-        <div className="glow-blob blob-cyan" />
         {children}
       </body>
     </html>
