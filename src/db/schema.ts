@@ -36,6 +36,12 @@ export async function initDb() {
       CREATE INDEX IF NOT EXISTS idx_work_entries_user_id ON work_entries (user_id)
     `);
 
+    // Ensure default-user exists in the users table to prevent FOREIGN KEY constraint failures
+    await db.execute({
+      sql: "INSERT OR IGNORE INTO users (id, email, password_hash, created_at) VALUES (?, ?, ?, ?)",
+      args: ["default-user", "default@example.com", "not-needed", new Date().toISOString()],
+    });
+
     console.log('Database tables verified/initialized successfully.');
   } catch (error) {
     console.error('Failed to initialize database tables:', error);
