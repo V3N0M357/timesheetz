@@ -1,15 +1,11 @@
 "use server";
 
 import { db } from "@/src/db/client";
-import { getSession } from "@/src/lib/auth";
 import { revalidatePath } from "next/cache";
 import crypto from "crypto";
 
 export async function addWorkEntryAction(prevState: any, formData: FormData) {
-  const session = await getSession();
-  if (!session) {
-    return { error: "Not authenticated" };
-  }
+  const userId = "default-user";
 
   const workDate = formData.get("work_date")?.toString();
   const hoursStr = formData.get("hours")?.toString();
@@ -40,7 +36,7 @@ export async function addWorkEntryAction(prevState: any, formData: FormData) {
         INSERT INTO work_entries (id, user_id, work_date, hours, hourly_rate, description, created_at)
         VALUES (?, ?, ?, ?, ?, ?, ?)
       `,
-      args: [id, session.userId, workDate, hours, hourlyRate, description, createdAt],
+      args: [id, userId, workDate, hours, hourlyRate, description, createdAt],
     });
 
     revalidatePath("/");
@@ -52,15 +48,12 @@ export async function addWorkEntryAction(prevState: any, formData: FormData) {
 }
 
 export async function deleteWorkEntryAction(id: string) {
-  const session = await getSession();
-  if (!session) {
-    return { error: "Not authenticated" };
-  }
+  const userId = "default-user";
 
   try {
     await db.execute({
       sql: "DELETE FROM work_entries WHERE id = ? AND user_id = ?",
-      args: [id, session.userId],
+      args: [id, userId],
     });
 
     revalidatePath("/");

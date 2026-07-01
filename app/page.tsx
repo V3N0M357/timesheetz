@@ -1,15 +1,8 @@
-import { redirect } from "next/navigation";
-import { getSession } from "@/src/lib/auth";
 import { db } from "@/src/db/client";
 import { initDb } from "@/src/db/schema";
 import DashboardClient from "./dashboard-client";
 
 export default async function DashboardPage() {
-  const session = await getSession();
-  if (!session) {
-    redirect("/login");
-  }
-
   // Ensure DB schema initialized (idempotent)
   try {
     await initDb();
@@ -17,12 +10,14 @@ export default async function DashboardPage() {
     console.error("DB initialization error on page load:", err);
   }
 
-  // Fetch logged-in user's entries
+  const userId = "default-user";
+
+  // Fetch entries for the default user
   let entries: any[] = [];
   try {
     const result = await db.execute({
       sql: "SELECT * FROM work_entries WHERE user_id = ? ORDER BY work_date DESC, created_at DESC",
-      args: [session.userId],
+      args: [userId],
     });
     
     entries = result.rows.map((row) => ({
@@ -38,5 +33,5 @@ export default async function DashboardPage() {
     console.error("Failed to query entries:", err);
   }
 
-  return <DashboardClient userEmail={session.email} initialEntries={entries} />;
+  return <DashboardClient initialEntries={entries} />;
 }

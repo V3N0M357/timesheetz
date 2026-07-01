@@ -1,9 +1,8 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState } from "react";
 import { addWorkEntryAction, deleteWorkEntryAction } from "./actions/workActions";
-import { logoutAction } from "./actions/authActions";
-import { Clock, DollarSign, Search, Trash2, LogOut, Plus, Calendar, Briefcase, TrendingUp } from "lucide-react";
+import { Clock, DollarSign, Search, Trash2, Plus, Calendar, Briefcase, TrendingUp } from "lucide-react";
 
 interface WorkEntry {
   id: string;
@@ -16,16 +15,14 @@ interface WorkEntry {
 }
 
 interface DashboardClientProps {
-  userEmail: string;
   initialEntries: WorkEntry[];
 }
 
-export default function DashboardClient({ userEmail, initialEntries }: DashboardClientProps) {
+export default function DashboardClient({ initialEntries }: DashboardClientProps) {
   const [entries, setEntries] = useState<WorkEntry[]>(initialEntries);
   const [searchQuery, setSearchQuery] = useState("");
   const [formError, setFormError] = useState<string | null>(null);
   const [isAdding, setIsAdding] = useState(false);
-  const [isPending, startTransition] = useTransition();
 
   // Get current date in YYYY-MM-DD format for form default
   const getTodayDateString = () => {
@@ -59,7 +56,7 @@ export default function DashboardClient({ userEmail, initialEntries }: Dashboard
         // Optimistic/Local state update
         const newEntry: WorkEntry = {
           id: Math.random().toString(), // Temp ID, page refresh will get real one
-          user_id: "",
+          user_id: "default-user",
           work_date: formData.get("work_date") as string,
           hours: parseFloat(formData.get("hours") as string),
           hourly_rate: parseFloat(formData.get("hourly_rate") as string),
@@ -100,13 +97,6 @@ export default function DashboardClient({ userEmail, initialEntries }: Dashboard
     }
   };
 
-  // Logout handler
-  const handleLogout = () => {
-    startTransition(async () => {
-      await logoutAction();
-    });
-  };
-
   // Filtering
   const filteredEntries = entries.filter((entry) =>
     entry.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -129,19 +119,15 @@ export default function DashboardClient({ userEmail, initialEntries }: Dashboard
   return (
     <div style={{ maxWidth: "1200px", margin: "0 auto", padding: "2rem 1.5rem" }}>
       {/* Header Panel */}
-      <header className="glass-panel animate-fade-in" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "1.5rem 2rem", marginBottom: "2rem" }}>
+      <header className="glass-panel animate-fade-in" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "1.25rem 2rem", marginBottom: "2rem" }}>
         <div>
           <h1 style={{ fontSize: "1.25rem", fontWeight: "700", color: "var(--text-main)" }}>
             Timesheetz
           </h1>
           <p style={{ fontSize: "0.85rem", color: "var(--text-muted)", marginTop: "0.1rem" }}>
-            Logged in as <span style={{ color: "var(--text-main)", fontWeight: "500" }}>{userEmail}</span>
+            Scenery Work Tracker
           </p>
         </div>
-        <button className="btn btn-danger" onClick={handleLogout} disabled={isPending} style={{ padding: "0.5rem 1rem", fontSize: "0.85rem" }}>
-          <LogOut size={14} />
-          <span>Sign Out</span>
-        </button>
       </header>
 
       {/* Metrics Cards Grid */}
@@ -262,7 +248,7 @@ export default function DashboardClient({ userEmail, initialEntries }: Dashboard
             />
           </div>
 
-          <button type="submit" className="btn btn-primary" disabled={isAdding} style={{ flex: "0 0 auto", height: "43px", padding: "0 1.5rem" }}>
+          <button type="submit" className="btn btn-primary" disabled={isAdding} style={{ flex: "0 0 auto", height: "39px", padding: "0 1.5rem" }}>
             {isAdding ? "Saving..." : "Add Entry"}
           </button>
         </form>
@@ -313,7 +299,7 @@ export default function DashboardClient({ userEmail, initialEntries }: Dashboard
                     <td>{entry.hours} hrs</td>
                     <td>{formatCurrency(entry.hourly_rate)}</td>
                     <td style={{ color: "var(--text-muted)" }}>{entry.description}</td>
-                    <td style={{ fontWeight: "600", color: "#10b981" }}>
+                    <td style={{ fontWeight: "600", color: "var(--success)" }}>
                       {formatCurrency(entry.hours * entry.hourly_rate)}
                     </td>
                     <td style={{ textAlign: "center" }}>
