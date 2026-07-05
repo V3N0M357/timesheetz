@@ -1,8 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { addWorkEntryAction, deleteWorkEntryAction } from "./actions/workActions";
-import { Clock, DollarSign, Search, Trash2, Plus, Calendar, Briefcase, TrendingUp } from "lucide-react";
+import { addWorkEntryAction, deleteWorkEntryAction, updateWorkEntryAction, addMultipleWorkEntriesAction } from "./actions/workActions";
+import { Clock, DollarSign, Search, Trash2, Plus, Calendar, Briefcase, TrendingUp, Download, Mail, Edit2, Check, X, Layers } from "lucide-react";
 
 interface WorkEntry {
   id: string;
@@ -24,7 +24,25 @@ export default function DashboardClient({ initialEntries }: DashboardClientProps
   const [formError, setFormError] = useState<string | null>(null);
   const [isAdding, setIsAdding] = useState(false);
 
-  // Get current date in YYYY-MM-DD format for form default
+  // Inline Editing States
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editWorkDate, setEditWorkDate] = useState("");
+  const [editHours, setEditHours] = useState("");
+  const [editHourlyRate, setEditHourlyRate] = useState("");
+  const [editDescription, setEditDescription] = useState("");
+
+  // Mass Add Modal States
+  const [isMassAddOpen, setIsMassAddOpen] = useState(false);
+  const [massAddRows, setMassAddRows] = useState<Array<{
+    work_date: string;
+    hours: string;
+    hourly_rate: string;
+    description: string;
+  }>>([]);
+  const [massAddError, setMassAddError] = useState<string | null>(null);
+  const [isBatchSaving, setIsBatchSaving] = useState(false);
+
+  // Get current date in YYYY-MM-DD format
   const getTodayDateString = () => {
     const today = new Date();
     const year = today.getFullYear();
@@ -39,7 +57,15 @@ export default function DashboardClient({ initialEntries }: DashboardClientProps
   const [hourlyRate, setHourlyRate] = useState("");
   const [description, setDescription] = useState("");
 
-  // Handle adding a new entry
+  // Format currency helper
+  const formatCurrency = (value: number) => {
+    return new Intl.NumberFormat("en-US", {
+      style: "currency",
+      currency: "USD",
+    }).format(value);
+  };
+
+  // 1. Single Add Entry handler
   const handleAddEntry = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setFormError(null);
@@ -53,9 +79,9 @@ export default function DashboardClient({ initialEntries }: DashboardClientProps
         setFormError(res.error);
         setIsAdding(false);
       } else {
-        // Optimistic/Local state update
+        // Refresh local UI state
         const newEntry: WorkEntry = {
-          id: Math.random().toString(), // Temp ID, page refresh will get real one
+          id: Math.random().toString(), // Temporary ID until page reload fetches Turso UUID
           user_id: "default-user",
           work_date: formData.get("work_date") as string,
           hours: parseFloat(formData.get("hours") as string),
@@ -66,7 +92,7 @@ export default function DashboardClient({ initialEntries }: DashboardClientProps
 
         setEntries([newEntry, ...entries]);
         
-        // Reset form inputs (except date and hourly rate which user might want to reuse)
+        // Reset dynamic inputs
         setHours("");
         setDescription("");
         setIsAdding(false);
@@ -77,11 +103,10 @@ export default function DashboardClient({ initialEntries }: DashboardClientProps
     }
   };
 
-  // Handle deleting an entry
+  // 2. Delete Entry handler
   const handleDeleteEntry = async (id: string) => {
     if (!confirm("Are you sure you want to delete this work entry?")) return;
 
-    // Save previous state for rollback
     const previousEntries = [...entries];
     setEntries(entries.filter((entry) => entry.id !== id));
 
@@ -97,24 +122,216 @@ export default function DashboardClient({ initialEntries }: DashboardClientProps
     }
   };
 
-  // Filtering
+  // 3. Inline Edit Triggers
+  const startEdit = (entry: WorkEntry) => {
+    setEditingId(entry.id);
+    setEditWorkDate(entry.work_date);
+    setEditHours(entry.hours.toString());
+    setEditHourlyRate(entry.hourly_rate.toString());
+    setEditDescription(entry.description);
+  };
+
+  const cancelEdit = () => {
+    setEditingId(null);
+  };
+
+  const saveEdit = async (id: string) => {
+    if (!editWorkDate || !editHours || !editHourlyRate || !editDescription) {
+      alert("Please fill in all editing fields");
+      return;
+    }
+
+    const updatedHours = parseFloat(editHours);
+    const updatedRate = parseFloat(editHourlyRate);
+
+    if (isNaN(updatedHours) || updatedHours <= 0 || isNaN(updatedRate) || updatedRate < 0) {
+      alert("Invalid numeric entries for hours or rate");
+      return;
+    }
+
+    const previousEntries = [...entries];
+    
+    // Optimistically update locally
+    setEntries(entries.map((e) => e.id === id ? {
+      ...e,
+      work_date: editWorkDate,
+      hours: updatedHours,
+      hourly_rate: updatedRate,
+      description: editDescription
+    } : e));
+
+    setEditingId(null);
+
+    const formData = new FormData();
+    formData.append("work_date", editWorkDate);
+    formData.append("hours", editHours);
+    formData.append("hourly_rate", editHourlyRate);
+    formData.append("description", editDescription);
+
+    try {
+      const res = await updateWorkEntryAction(id, formData);
+      if (res && res.error) {
+        alert(res.error);
+        setEntries(previousEntries);
+      }
+    } catch (err) {
+      alert("Failed to save changes due to a network error.");
+      setEntries(previousEntries);
+    }
+  };
+
+  // 4. CSV Downloader
+  const downloadCSV = () => {
+    if (entries.length === 0) {
+      alert("No data available to export.");
+      return;
+    }
+    
+    const headers = ["Date Worked", "Hours Worked", "Hourly Rate ($)", "What I Did", "Total Earned ($)"];
+    const rows = filteredEntries.map((entry) => [
+      entry.work_date,
+      entry.hours,
+      entry.hourly_rate,
+      `"${entry.description.replace(/"/g, '""')}"`,
+      entry.hours * entry.hourly_rate,
+    ]);
+
+    const csvContent = [headers.join(","), ...rows.map((row) => row.join(","))].join("\n");
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.setAttribute("href", url);
+    link.setAttribute("download", `timesheetz_${new Date().toISOString().split("T")[0]}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  // 5. Email timesheet composer
+  const emailTimesheet = () => {
+    if (filteredEntries.length === 0) {
+      alert("No entries to email.");
+      return;
+    }
+
+    const recipient = prompt("Enter recipient email address (optional):") || "";
+    const subject = encodeURIComponent("Timesheet Work Summary");
+
+    let bodyText = "Work Timesheet Log:\n\n";
+    filteredEntries.forEach((entry) => {
+      bodyText += `Date: ${entry.work_date}\n`;
+      bodyText += `Hours: ${entry.hours} hrs\n`;
+      bodyText += `Rate: ${formatCurrency(entry.hourly_rate)}/hr\n`;
+      bodyText += `Activity: ${entry.description}\n`;
+      bodyText += `Total Earned: ${formatCurrency(entry.hours * entry.hourly_rate)}\n`;
+      bodyText += `----------------------------------------\n\n`;
+    });
+
+    bodyText += `TOTALS:\n`;
+    bodyText += `Total Hours: ${totalHours.toFixed(1)} hrs\n`;
+    bodyText += `Total Earnings: ${formatCurrency(totalEarnings)}\n`;
+    bodyText += `Average Hourly Rate: ${formatCurrency(averageHourlyRate)}/hr\n`;
+
+    window.location.href = `mailto:${recipient}?subject=${subject}&body=${encodeURIComponent(bodyText)}`;
+  };
+
+  // 6. Bulk Add Modals Triggers
+  const openMassAdd = () => {
+    // Start with 3 prefilled rows
+    setMassAddRows([
+      { work_date: getTodayDateString(), hours: "", hourly_rate: hourlyRate || "30", description: "" },
+      { work_date: getTodayDateString(), hours: "", hourly_rate: hourlyRate || "30", description: "" },
+      { work_date: getTodayDateString(), hours: "", hourly_rate: hourlyRate || "30", description: "" }
+    ]);
+    setMassAddError(null);
+    setIsMassAddOpen(true);
+  };
+
+  const closeMassAdd = () => {
+    setIsMassAddOpen(false);
+  };
+
+  const addMassRow = () => {
+    const lastRate = massAddRows[massAddRows.length - 1]?.hourly_rate || "30";
+    setMassAddRows([...massAddRows, { work_date: getTodayDateString(), hours: "", hourly_rate: lastRate, description: "" }]);
+  };
+
+  const removeMassRow = (index: number) => {
+    if (massAddRows.length === 1) return;
+    setMassAddRows(massAddRows.filter((_, idx) => idx !== index));
+  };
+
+  const updateMassRow = (index: number, field: string, value: string) => {
+    setMassAddRows(massAddRows.map((row, idx) => idx === index ? { ...row, [field]: value } : row));
+  };
+
+  const handleMassSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setMassAddError(null);
+
+    // Validate inputs
+    const validEntries = [];
+    for (let i = 0; i < massAddRows.length; i++) {
+      const row = massAddRows[i];
+      if (!row.work_date || !row.hours || !row.hourly_rate || !row.description.trim()) {
+        setMassAddError(`Please fill in all fields for Row #${i + 1}`);
+        return;
+      }
+
+      const parsedHours = parseFloat(row.hours);
+      const parsedRate = parseFloat(row.hourly_rate);
+
+      if (isNaN(parsedHours) || parsedHours <= 0 || isNaN(parsedRate) || parsedRate < 0) {
+        setMassAddError(`Invalid numbers in Row #${i + 1}. Hours and Rate must be positive.`);
+        return;
+      }
+
+      validEntries.push({
+        work_date: row.work_date,
+        hours: parsedHours,
+        hourly_rate: parsedRate,
+        description: row.description.trim()
+      });
+    }
+
+    setIsBatchSaving(true);
+
+    try {
+      const res = await addMultipleWorkEntriesAction(validEntries);
+      if (res && res.error) {
+        setMassAddError(res.error);
+        setIsBatchSaving(false);
+      } else {
+        // Optimistically add locally
+        const mappedLocal: WorkEntry[] = validEntries.map(ent => ({
+          id: Math.random().toString(),
+          user_id: "default-user",
+          work_date: ent.work_date,
+          hours: ent.hours,
+          hourly_rate: ent.hourly_rate,
+          description: ent.description,
+          created_at: new Date().toISOString()
+        }));
+
+        setEntries([...mappedLocal, ...entries]);
+        setIsBatchSaving(false);
+        setIsMassAddOpen(false);
+      }
+    } catch (err) {
+      setMassAddError("Connection error while saving batch logs.");
+      setIsBatchSaving(false);
+    }
+  };
+
+  // Filter calculations
   const filteredEntries = entries.filter((entry) =>
     entry.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
     entry.work_date.includes(searchQuery)
   );
 
-  // Stats calculations
   const totalHours = filteredEntries.reduce((sum, entry) => sum + entry.hours, 0);
   const totalEarnings = filteredEntries.reduce((sum, entry) => sum + (entry.hours * entry.hourly_rate), 0);
   const averageHourlyRate = totalHours > 0 ? totalEarnings / totalHours : 0;
-
-  // Format currency
-  const formatCurrency = (value: number) => {
-    return new Intl.NumberFormat("en-US", {
-      style: "currency",
-      currency: "USD",
-    }).format(value);
-  };
 
   return (
     <div style={{ maxWidth: "1200px", margin: "0 auto", padding: "2rem 1.5rem" }}>
@@ -125,8 +342,14 @@ export default function DashboardClient({ initialEntries }: DashboardClientProps
             Timesheetz
           </h1>
           <p style={{ fontSize: "0.85rem", color: "var(--text-muted)", marginTop: "0.1rem" }}>
-            Scenery Work Tracker
+            Scenic Work Tracker
           </p>
+        </div>
+        <div style={{ display: "flex", gap: "0.75rem" }}>
+          <button className="btn" onClick={openMassAdd} style={{ display: "flex", alignItems: "center", gap: "0.35rem", padding: "0.5rem 1rem", fontSize: "0.85rem", border: "1.5px solid var(--accent)", color: "var(--accent)" }}>
+            <Layers size={14} />
+            <span>Mass Add</span>
+          </button>
         </div>
       </header>
 
@@ -259,17 +482,30 @@ export default function DashboardClient({ initialEntries }: DashboardClientProps
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "1rem", marginBottom: "1.5rem" }}>
           <h3 style={{ fontSize: "1.1rem", fontWeight: "700" }}>Work History Log</h3>
           
-          {/* Search bar */}
-          <div style={{ position: "relative", width: "100%", maxWidth: "300px" }}>
-            <Search size={16} style={{ position: "absolute", left: "0.85rem", top: "50%", transform: "translateY(-50%)", color: "var(--text-muted)" }} />
-            <input
-              type="text"
-              placeholder="Search description or date..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="input-field"
-              style={{ paddingLeft: "2.3rem", fontSize: "0.85rem", paddingTop: "0.5rem", paddingBottom: "0.5rem" }}
-            />
+          {/* Action buttons (Download CSV / Email) and Search bar */}
+          <div style={{ display: "flex", gap: "0.75rem", flexWrap: "wrap", width: "100%", justifyItems: "flex-end", justifyContent: "space-between", alignItems: "center", marginTop: "0.25rem" }}>
+            <div style={{ display: "flex", gap: "0.75rem" }}>
+              <button className="btn" onClick={downloadCSV} title="Export spreadsheet data" style={{ display: "flex", alignItems: "center", gap: "0.35rem", padding: "0.45rem 0.85rem", fontSize: "0.8rem" }}>
+                <Download size={14} />
+                <span>Download CSV</span>
+              </button>
+              <button className="btn" onClick={emailTimesheet} title="Send work report by email" style={{ display: "flex", alignItems: "center", gap: "0.35rem", padding: "0.45rem 0.85rem", fontSize: "0.8rem" }}>
+                <Mail size={14} />
+                <span>Email Report</span>
+              </button>
+            </div>
+
+            <div style={{ position: "relative", width: "100%", maxWidth: "300px" }}>
+              <Search size={16} style={{ position: "absolute", left: "0.85rem", top: "50%", transform: "translateY(-50%)", color: "var(--text-muted)" }} />
+              <input
+                type="text"
+                placeholder="Search description or date..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="input-field"
+                style={{ paddingLeft: "2.3rem", fontSize: "0.85rem", paddingTop: "0.45rem", paddingBottom: "0.45rem" }}
+              />
+            </div>
           </div>
         </div>
 
@@ -289,29 +525,108 @@ export default function DashboardClient({ initialEntries }: DashboardClientProps
                   <th>Hourly Rate</th>
                   <th>What I Did</th>
                   <th>Total Earned</th>
-                  <th style={{ width: "80px", textAlign: "center" }}>Action</th>
+                  <th style={{ width: "120px", textAlign: "center" }}>Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {filteredEntries.map((entry) => (
                   <tr key={entry.id}>
-                    <td style={{ fontWeight: "500" }}>{entry.work_date}</td>
-                    <td>{entry.hours} hrs</td>
-                    <td>{formatCurrency(entry.hourly_rate)}</td>
-                    <td style={{ color: "var(--text-muted)" }}>{entry.description}</td>
-                    <td style={{ fontWeight: "600", color: "var(--success)" }}>
-                      {formatCurrency(entry.hours * entry.hourly_rate)}
-                    </td>
-                    <td style={{ textAlign: "center" }}>
-                      <button
-                        onClick={() => handleDeleteEntry(entry.id)}
-                        className="btn btn-danger btn-icon-only"
-                        title="Delete log"
-                        style={{ padding: "6px" }}
-                      >
-                        <Trash2 size={14} />
-                      </button>
-                    </td>
+                    {/* Inline Edit Checking */}
+                    {editingId === entry.id ? (
+                      <>
+                        <td>
+                          <input
+                            type="date"
+                            value={editWorkDate}
+                            onChange={(e) => setEditWorkDate(e.target.value)}
+                            className="input-field"
+                            style={{ padding: "0.35rem 0.5rem", fontSize: "0.8rem" }}
+                          />
+                        </td>
+                        <td>
+                          <input
+                            type="number"
+                            step="0.1"
+                            min="0.1"
+                            value={editHours}
+                            onChange={(e) => setEditHours(e.target.value)}
+                            className="input-field"
+                            style={{ padding: "0.35rem 0.5rem", fontSize: "0.8rem" }}
+                          />
+                        </td>
+                        <td>
+                          <input
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            value={editHourlyRate}
+                            onChange={(e) => setEditHourlyRate(e.target.value)}
+                            className="input-field"
+                            style={{ padding: "0.35rem 0.5rem", fontSize: "0.8rem" }}
+                          />
+                        </td>
+                        <td>
+                          <input
+                            type="text"
+                            value={editDescription}
+                            onChange={(e) => setEditDescription(e.target.value)}
+                            className="input-field"
+                            style={{ padding: "0.35rem 0.5rem", fontSize: "0.8rem" }}
+                          />
+                        </td>
+                        <td style={{ fontWeight: "600", color: "var(--success)" }}>
+                          {formatCurrency(parseFloat(editHours || "0") * parseFloat(editHourlyRate || "0"))}
+                        </td>
+                        <td style={{ display: "flex", gap: "0.35rem", justifyContent: "center" }}>
+                          <button
+                            onClick={() => saveEdit(entry.id)}
+                            className="btn btn-primary btn-icon-only"
+                            title="Save"
+                            style={{ padding: "4px", borderColor: "var(--success)", background: "var(--success)" }}
+                          >
+                            <Check size={14} />
+                          </button>
+                          <button
+                            onClick={cancelEdit}
+                            className="btn btn-icon-only"
+                            title="Cancel"
+                            style={{ padding: "4px" }}
+                          >
+                            <X size={14} />
+                          </button>
+                        </td>
+                      </>
+                    ) : (
+                      <>
+                        <td style={{ fontWeight: "500" }}>{entry.work_date}</td>
+                        <td>{entry.hours} hrs</td>
+                        <td>{formatCurrency(entry.hourly_rate)}</td>
+                        <td style={{ color: "var(--text-muted)" }}>{entry.description}</td>
+                        <td style={{ fontWeight: "600", color: "var(--success)" }}>
+                          {formatCurrency(entry.hours * entry.hourly_rate)}
+                        </td>
+                        <td>
+                          <div style={{ display: "flex", gap: "0.35rem", justifyContent: "center" }}>
+                            <button
+                              onClick={() => startEdit(entry)}
+                              className="btn btn-icon-only"
+                              title="Edit inline"
+                              style={{ padding: "6px" }}
+                            >
+                              <Edit2 size={14} style={{ color: "var(--primary)" }} />
+                            </button>
+                            <button
+                              onClick={() => handleDeleteEntry(entry.id)}
+                              className="btn btn-danger btn-icon-only"
+                              title="Delete log"
+                              style={{ padding: "6px" }}
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          </div>
+                        </td>
+                      </>
+                    )}
                   </tr>
                 ))}
               </tbody>
@@ -319,6 +634,129 @@ export default function DashboardClient({ initialEntries }: DashboardClientProps
           </div>
         )}
       </section>
+
+      {/* Mass Addition Modal Layer */}
+      {isMassAddOpen && (
+        <div className="modal-overlay">
+          <div className="modal-content glass-panel animate-fade-in">
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1.5rem", borderBottom: "1px solid var(--border)", paddingBottom: "1rem" }}>
+              <h3 style={{ fontSize: "1.25rem", fontWeight: "700", display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                <Layers size={20} style={{ color: "var(--accent)" }} />
+                Mass Add Work Logs
+              </h3>
+              <button onClick={closeMassAdd} className="btn btn-icon-only" style={{ border: "none" }}>
+                <X size={18} />
+              </button>
+            </div>
+
+            {massAddError && (
+              <div style={{ padding: "0.75rem", background: "var(--danger-bg)", border: "1px solid rgba(239, 68, 68, 0.2)", borderRadius: "var(--border-radius-sm)", color: "#b91c1c", fontSize: "0.85rem", marginBottom: "1.25rem" }}>
+                {massAddError}
+              </div>
+            )}
+
+            <form onSubmit={handleMassSubmit} style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
+              <div className="modal-scroll-area">
+                <table className="custom-table" style={{ border: "none" }}>
+                  <thead>
+                    <tr>
+                      <th style={{ width: "50px", textAlign: "center" }}>#</th>
+                      <th style={{ width: "160px" }}>Date</th>
+                      <th style={{ width: "100px" }}>Hours</th>
+                      <th style={{ width: "100px" }}>Rate ($)</th>
+                      <th>What I Did (Description)</th>
+                      <th style={{ width: "60px", textAlign: "center" }}>Del</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {massAddRows.map((row, idx) => (
+                      <tr key={idx}>
+                        <td style={{ textAlign: "center", fontWeight: "600", color: "var(--text-muted)", fontSize: "0.8rem" }}>
+                          {idx + 1}
+                        </td>
+                        <td>
+                          <input
+                            type="date"
+                            value={row.work_date}
+                            required
+                            onChange={(e) => updateMassRow(idx, "work_date", e.target.value)}
+                            className="input-field"
+                            style={{ padding: "0.4rem 0.6rem", fontSize: "0.85rem" }}
+                          />
+                        </td>
+                        <td>
+                          <input
+                            type="number"
+                            step="0.1"
+                            min="0.1"
+                            placeholder="Hours"
+                            required
+                            value={row.hours}
+                            onChange={(e) => updateMassRow(idx, "hours", e.target.value)}
+                            className="input-field"
+                            style={{ padding: "0.4rem 0.6rem", fontSize: "0.85rem" }}
+                          />
+                        </td>
+                        <td>
+                          <input
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            placeholder="Rate"
+                            required
+                            value={row.hourly_rate}
+                            onChange={(e) => updateMassRow(idx, "hourly_rate", e.target.value)}
+                            className="input-field"
+                            style={{ padding: "0.4rem 0.6rem", fontSize: "0.85rem" }}
+                          />
+                        </td>
+                        <td>
+                          <input
+                            type="text"
+                            placeholder="e.g. Added dynamic search features"
+                            required
+                            value={row.description}
+                            onChange={(e) => updateMassRow(idx, "description", e.target.value)}
+                            className="input-field"
+                            style={{ padding: "0.4rem 0.6rem", fontSize: "0.85rem" }}
+                          />
+                        </td>
+                        <td style={{ textAlign: "center" }}>
+                          <button
+                            type="button"
+                            onClick={() => removeMassRow(idx)}
+                            disabled={massAddRows.length === 1}
+                            className="btn btn-danger btn-icon-only"
+                            style={{ padding: "4px", opacity: massAddRows.length === 1 ? 0.3 : 1 }}
+                          >
+                            <Trash2 size={12} />
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderTop: "1px solid var(--border)", paddingTop: "1.25rem" }}>
+                <button type="button" onClick={addMassRow} className="btn" style={{ display: "flex", alignItems: "center", gap: "0.35rem" }}>
+                  <Plus size={14} />
+                  <span>Add Row</span>
+                </button>
+
+                <div style={{ display: "flex", gap: "0.75rem" }}>
+                  <button type="button" onClick={closeMassAdd} className="btn">
+                    Cancel
+                  </button>
+                  <button type="submit" className="btn btn-primary" disabled={isBatchSaving} style={{ display: "flex", alignItems: "center", gap: "0.35rem" }}>
+                    {isBatchSaving ? "Saving Batch..." : "Submit Batch"}
+                  </button>
+                </div>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

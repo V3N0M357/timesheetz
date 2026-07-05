@@ -10,15 +10,10 @@ export default async function DashboardPage() {
     console.error("DB initialization error on page load:", err);
   }
 
-  const userId = "default-user";
-
-  // Fetch entries for the default user
+  // Fetch all entries in the database (regardless of user_id, so old logged logs show up)
   let entries: any[] = [];
   try {
-    const result = await db.execute({
-      sql: "SELECT * FROM work_entries WHERE user_id = ? ORDER BY work_date DESC, created_at DESC",
-      args: [userId],
-    });
+    const result = await db.execute("SELECT * FROM work_entries ORDER BY work_date DESC, created_at DESC");
     
     entries = result.rows.map((row) => ({
       id: row.id as string,
