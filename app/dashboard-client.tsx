@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { addWorkEntryAction, deleteWorkEntryAction, updateWorkEntryAction, addMultipleWorkEntriesAction } from "./actions/workActions";
-import { Clock, DollarSign, Search, Trash2, Plus, Calendar, Briefcase, TrendingUp, Download, Mail, Edit2, Check, X, Layers } from "lucide-react";
+import { Clock, DollarSign, Search, Trash2, Plus, Calendar, Briefcase, TrendingUp, Download, Mail, Edit2, Check, X, Layers, Filter } from "lucide-react";
 
 interface WorkEntry {
   id: string;
@@ -41,6 +41,13 @@ export default function DashboardClient({ initialEntries }: DashboardClientProps
   }>>([]);
   const [massAddError, setMassAddError] = useState<string | null>(null);
   const [isBatchSaving, setIsBatchSaving] = useState(false);
+
+  // Filter States
+  const [timePeriod, setTimePeriod] = useState("all"); // all, this-month, last-month, this-year, last-year
+  const [fromDate, setFromDate] = useState("");
+  const [toDate, setToDate] = useState("");
+  const [hoursFilter, setHoursFilter] = useState("all"); // all, under-2, 2-5, 5-8, over-8
+  const [sortBy, setSortBy] = useState("date-desc"); // date-desc, date-asc, earned-desc, earned-asc, hours-desc, hours-asc
 
   // Get current date in YYYY-MM-DD format
   const getTodayDateString = () => {
@@ -269,7 +276,6 @@ export default function DashboardClient({ initialEntries }: DashboardClientProps
     e.preventDefault();
     setMassAddError(null);
 
-    // Validate inputs
     const validEntries = [];
     for (let i = 0; i < massAddRows.length; i++) {
       const row = massAddRows[i];
@@ -302,7 +308,6 @@ export default function DashboardClient({ initialEntries }: DashboardClientProps
         setMassAddError(res.error);
         setIsBatchSaving(false);
       } else {
-        // Optimistically add locally
         const mappedLocal: WorkEntry[] = validEntries.map(ent => ({
           id: Math.random().toString(),
           user_id: "default-user",
@@ -323,12 +328,86 @@ export default function DashboardClient({ initialEntries }: DashboardClientProps
     }
   };
 
-  // Filter calculations
-  const filteredEntries = entries.filter((entry) =>
-    entry.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    entry.work_date.includes(searchQuery)
-  );
+  // Helper: check if a date falls in a time period
+  const isInTimePeriod = (dateStr: string) => {
+    if (timePeriod === "all") return true;
 
+    const date = new Date(dateStr + "T00:00:00");
+    const today = new Date();
+    const currentYear = today.getFullYear();
+    const currentMonth = today.getMonth(); // 0-indexed
+
+    if (timePeriod === "this-month") {
+      return date.getFullYear() === currentYear && date.getMonth() === currentMonth;
+    }
+    if (timePeriod === "last-month") {
+      const targetMonth = currentMonth === 0 ? 11 : currentMonth - 1;
+      const targetYear = currentMonth === 0 ? currentYear - 1 : currentYear;
+      return date.getFullYear() === targetYear && date.getMonth() === targetMonth;
+    }
+    if (timePeriod === "this-year") {
+      return date.getFullYear() === currentYear;
+    }
+    if (timePeriod === "last-year") {
+      return date.getFullYear() === currentYear - 1;
+    }
+    return true;
+  };
+
+  // Helper: check if hours match filter criteria
+  const matchesHoursFilter = (hoursVal: number) => {
+    if (hoursFilter === "all") return true;
+    if (hoursFilter === "under-2") return hoursVal < 2;
+    if (hoursFilter === "2-5") return hoursVal >= 2 && hoursVal <= 5;
+    if (hoursFilter === "5-8") return hoursVal > 5 && hoursVal <= 8;
+    if (hoursFilter === "over-8") return hoursVal > 8;
+    return true;
+  };
+
+  // Apply filters: Search, Period, Custom Dates, and Hours
+  const filteredEntries = entries
+    .filter((entry) => {
+      // 1. Text Search Filter (Matches Description or Date)
+      const matchesSearch =
+        entry.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        entry.work_date.includes(searchQuery);
+
+      // 2. Preset Time Period Filter
+      const matchesPeriod = isInTimePeriod(entry.work_date);
+
+      // 3. Custom Date Range Filters
+      const matchesFromDate = fromDate ? entry.work_date >= fromDate : true;
+      const matchesToDate = toDate ? entry.work_date <= toDate : true;
+
+      // 4. Hours worked Filter
+      const matchesHours = matchesHoursFilter(entry.hours);
+
+      return matchesSearch && matchesPeriod && matchesFromDate && matchesToDate && matchesHours;
+    })
+    .sort((a, b) => {
+      // Apply Sorting
+      if (sortBy === "date-desc") {
+        return b.work_date.localeCompare(a.work_date) || b.created_at.localeCompare(a.created_at);
+      }
+      if (sortBy === "date-asc") {
+        return a.work_date.localeCompare(b.work_date) || a.created_at.localeCompare(b.created_at);
+      }
+      if (sortBy === "earned-desc") {
+        return (b.hours * b.hourly_rate) - (a.hours * a.hourly_rate);
+      }
+      if (sortBy === "earned-asc") {
+        return (a.hours * a.hourly_rate) - (b.hours * b.hourly_rate);
+      }
+      if (sortBy === "hours-desc") {
+        return b.hours - a.hours;
+      }
+      if (sortBy === "hours-asc") {
+        return a.hours - b.hours;
+      }
+      return 0;
+    });
+
+  // Calculate Metrics based on filtered records
   const totalHours = filteredEntries.reduce((sum, entry) => sum + entry.hours, 0);
   const totalEarnings = filteredEntries.reduce((sum, entry) => sum + (entry.hours * entry.hourly_rate), 0);
   const averageHourlyRate = totalHours > 0 ? totalEarnings / totalHours : 0;
@@ -402,7 +481,7 @@ export default function DashboardClient({ initialEntries }: DashboardClientProps
           </div>
         )}
 
-        {/* Horizontal Form Layout: Date, Hours, Rate, Description, Submit */}
+        {/* Horizontal Form Layout */}
         <form onSubmit={handleAddEntry} style={{ display: "flex", flexWrap: "wrap", gap: "1.25rem", alignItems: "flex-end" }}>
           <div className="form-group" style={{ flex: "1 1 180px" }}>
             <label className="form-label">
@@ -479,31 +558,108 @@ export default function DashboardClient({ initialEntries }: DashboardClientProps
 
       {/* History Log Section */}
       <section className="glass-panel animate-fade-in" style={{ padding: "2rem" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "1rem", marginBottom: "1.5rem" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "1rem", marginBottom: "1rem" }}>
           <h3 style={{ fontSize: "1.1rem", fontWeight: "700" }}>Work History Log</h3>
           
-          {/* Action buttons (Download CSV / Email) and Search bar */}
-          <div style={{ display: "flex", gap: "0.75rem", flexWrap: "wrap", width: "100%", justifyItems: "flex-end", justifyContent: "space-between", alignItems: "center", marginTop: "0.25rem" }}>
-            <div style={{ display: "flex", gap: "0.75rem" }}>
-              <button className="btn" onClick={downloadCSV} title="Export spreadsheet data" style={{ display: "flex", alignItems: "center", gap: "0.35rem", padding: "0.45rem 0.85rem", fontSize: "0.8rem" }}>
-                <Download size={14} />
-                <span>Download CSV</span>
-              </button>
-              <button className="btn" onClick={emailTimesheet} title="Send work report by email" style={{ display: "flex", alignItems: "center", gap: "0.35rem", padding: "0.45rem 0.85rem", fontSize: "0.8rem" }}>
-                <Mail size={14} />
-                <span>Email Report</span>
-              </button>
-            </div>
+          <div style={{ display: "flex", gap: "0.75rem" }}>
+            <button className="btn" onClick={downloadCSV} title="Export spreadsheet data" style={{ display: "flex", alignItems: "center", gap: "0.35rem", padding: "0.45rem 0.85rem", fontSize: "0.8rem" }}>
+              <Download size={14} />
+              <span>Download CSV</span>
+            </button>
+            <button className="btn" onClick={emailTimesheet} title="Send work report by email" style={{ display: "flex", alignItems: "center", gap: "0.35rem", padding: "0.45rem 0.85rem", fontSize: "0.8rem" }}>
+              <Mail size={14} />
+              <span>Email Report</span>
+            </button>
+          </div>
+        </div>
 
-            <div style={{ position: "relative", width: "100%", maxWidth: "300px" }}>
-              <Search size={16} style={{ position: "absolute", left: "0.85rem", top: "50%", transform: "translateY(-50%)", color: "var(--text-muted)" }} />
+        {/* Filter Controls Panel */}
+        <div className="filter-panel animate-fade-in">
+          <div className="filter-group">
+            <span className="filter-label">
+              <Calendar size={12} style={{ marginRight: "4px", display: "inline" }} />
+              Time Period
+            </span>
+            <select
+              value={timePeriod}
+              onChange={(e) => setTimePeriod(e.target.value)}
+              className="filter-select"
+            >
+              <option value="all">All Time</option>
+              <option value="this-month">This Month</option>
+              <option value="last-month">Last Month</option>
+              <option value="this-year">This Year</option>
+              <option value="last-year">Last Year</option>
+            </select>
+          </div>
+
+          <div className="filter-group">
+            <span className="filter-label">From Date</span>
+            <input
+              type="date"
+              value={fromDate}
+              onChange={(e) => setFromDate(e.target.value)}
+              className="filter-select"
+              style={{ padding: "0.45rem 0.65rem" }}
+            />
+          </div>
+
+          <div className="filter-group">
+            <span className="filter-label">To Date</span>
+            <input
+              type="date"
+              value={toDate}
+              onChange={(e) => setToDate(e.target.value)}
+              className="filter-select"
+              style={{ padding: "0.45rem 0.65rem" }}
+            />
+          </div>
+
+          <div className="filter-group">
+            <span className="filter-label">
+              <Clock size={12} style={{ marginRight: "4px", display: "inline" }} />
+              Hours Worked
+            </span>
+            <select
+              value={hoursFilter}
+              onChange={(e) => setHoursFilter(e.target.value)}
+              className="filter-select"
+            >
+              <option value="all">All Hours</option>
+              <option value="under-2">&lt; 2 hrs</option>
+              <option value="2-5">2 - 5 hrs</option>
+              <option value="5-8">5 - 8 hrs</option>
+              <option value="over-8">&gt; 8 hrs</option>
+            </select>
+          </div>
+
+          <div className="filter-group">
+            <span className="filter-label">Sort By</span>
+            <select
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value)}
+              className="filter-select"
+            >
+              <option value="date-desc">Date (Newest)</option>
+              <option value="date-asc">Date (Oldest)</option>
+              <option value="earned-desc">Earnings (High to Low)</option>
+              <option value="earned-asc">Earnings (Low to High)</option>
+              <option value="hours-desc">Hours (High to Low)</option>
+              <option value="hours-asc">Hours (Low to High)</option>
+            </select>
+          </div>
+
+          <div className="filter-group" style={{ flex: "1 1 200px", maxWidth: "300px", marginLeft: "auto" }}>
+            <span className="filter-label">Search Activity</span>
+            <div style={{ position: "relative", width: "100%" }}>
+              <Search size={14} style={{ position: "absolute", left: "0.75rem", top: "50%", transform: "translateY(-50%)", color: "var(--text-muted)" }} />
               <input
                 type="text"
-                placeholder="Search description or date..."
+                placeholder="Type keywords..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="input-field"
-                style={{ paddingLeft: "2.3rem", fontSize: "0.85rem", paddingTop: "0.45rem", paddingBottom: "0.45rem" }}
+                style={{ paddingLeft: "2.1rem", fontSize: "0.85rem", paddingTop: "0.45rem", paddingBottom: "0.45rem" }}
               />
             </div>
           </div>
@@ -638,7 +794,7 @@ export default function DashboardClient({ initialEntries }: DashboardClientProps
       {/* Mass Addition Modal Layer */}
       {isMassAddOpen && (
         <div className="modal-overlay">
-          <div className="modal-content glass-panel animate-fade-in">
+          <div className="modal-content glass-panel">
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1.5rem", borderBottom: "1px solid var(--border)", paddingBottom: "1rem" }}>
               <h3 style={{ fontSize: "1.25rem", fontWeight: "700", display: "flex", alignItems: "center", gap: "0.5rem" }}>
                 <Layers size={20} style={{ color: "var(--accent)" }} />

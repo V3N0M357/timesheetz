@@ -20,6 +20,10 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={`${inter.variable}`}>
+        {/* Looping video background with image fallback */}
+        <video autoPlay muted loop playsInline className="video-background">
+          <source src="/background.mp4" type="video/mp4" />
+        </video>
         {children}
       </body>
     </html>
