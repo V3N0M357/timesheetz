@@ -449,7 +449,8 @@ export default function DashboardClient({ initialEntries }: DashboardClientProps
   const averageHourlyRate = totalHours > 0 ? totalEarnings / totalHours : 0;
 
   return (
-    <div style={{ maxWidth: "1200px", margin: "0 auto", padding: "2rem 1.5rem" }}>
+    <>
+      <div className="no-print" style={{ maxWidth: "1200px", margin: "0 auto", padding: "2rem 1.5rem" }}>
       {/* Header Panel */}
       <header className="glass-panel animate-fade-in" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "1.25rem 2rem", marginBottom: "2rem" }}>
         <div>
@@ -954,5 +955,96 @@ export default function DashboardClient({ initialEntries }: DashboardClientProps
         </div>
       )}
     </div>
+
+    {/* Beautiful PDF Report Container (Printed only, hidden on screen) */}
+    <div className="print-report-container">
+      <div className="print-header">
+        <div>
+          <h1 className="print-title">TIMESHEET REPORT</h1>
+          <p className="print-subtitle">Generated Work Log Summary Report</p>
+        </div>
+        <div style={{ textAlign: "right" }}>
+          <p className="print-meta-label">Generated On</p>
+          <p className="print-meta-val">
+            {new Date().toLocaleDateString("en-US", {
+              year: "numeric",
+              month: "long",
+              day: "numeric",
+            })}
+          </p>
+        </div>
+      </div>
+
+      <div className="print-details">
+        <div>
+          <h3 className="print-sec-title">Owner Details</h3>
+          <p className="print-text" style={{ fontWeight: "600" }}>Default Timesheetz User</p>
+          <p className="print-text" style={{ color: "#64748b", fontSize: "0.8rem", marginTop: "0.1rem" }}>
+            default@example.com
+          </p>
+        </div>
+        <div style={{ textAlign: "right" }}>
+          <h3 className="print-sec-title">Report Summary</h3>
+          <p className="print-text">
+            Period: {timePeriod === "all" ? "All Time" : timePeriod.replace("-", " ")}
+          </p>
+          {(fromDate || toDate) && (
+            <p className="print-text" style={{ fontSize: "0.8rem", color: "#64748b", marginTop: "0.1rem" }}>
+              Range: {fromDate || "Start"} to {toDate || "End"}
+            </p>
+          )}
+        </div>
+      </div>
+
+      <div className="print-metrics">
+        <div className="print-card">
+          <span className="print-card-label">Total Earnings</span>
+          <span className="print-card-val" style={{ color: "var(--success)" }}>
+            {formatCurrency(totalEarnings)}
+          </span>
+        </div>
+        <div className="print-card">
+          <span className="print-card-label">Total Hours Worked</span>
+          <span className="print-card-val">{totalHours.toFixed(1)} hrs</span>
+        </div>
+        <div className="print-card">
+          <span className="print-card-label">Average Hourly Rate</span>
+          <span className="print-card-val" style={{ color: "var(--accent)" }}>
+            {formatCurrency(averageHourlyRate)}/hr
+          </span>
+        </div>
+      </div>
+
+      <table className="print-table">
+        <thead>
+          <tr>
+            <th style={{ width: "15%" }}>Date Worked</th>
+            <th style={{ width: "12%", textAlign: "right" }}>Hours</th>
+            <th style={{ width: "15%", textAlign: "right" }}>Hourly Rate</th>
+            <th>Activity (What I Did)</th>
+            <th style={{ width: "18%", textAlign: "right" }}>Total Earned</th>
+          </tr>
+        </thead>
+        <tbody>
+          {filteredEntries.map((entry) => (
+            <tr key={entry.id}>
+              <td style={{ fontWeight: "500" }}>{entry.work_date}</td>
+              <td style={{ textAlign: "right" }}>{entry.hours} hrs</td>
+              <td style={{ textAlign: "right" }}>{formatCurrency(entry.hourly_rate)}</td>
+              <td style={{ color: "#334155" }}>{entry.description}</td>
+              <td style={{ textAlign: "right", fontWeight: "700", color: "var(--success)" }}>
+                {formatCurrency(entry.hours * entry.hourly_rate)}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+
+      <div className="print-footer">
+        <span>Thank you for using Timesheetz.</span>
+        <span>Generated dynamically via Timesheetz Web Console</span>
+      </div>
+    </div>
+  </>
   );
 }
