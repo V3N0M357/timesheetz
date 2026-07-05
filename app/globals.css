@@ -374,7 +374,7 @@ a {
 /* Print Specific Styles for Professional PDF Layouts */
 @media print {
   @page {
-    margin: 1.6cm 1.2cm;
+    margin: 0; /* Hides browser URL header and date footer */
     size: portrait;
   }
   
@@ -382,75 +382,240 @@ a {
     background: #ffffff !important;
     background-image: none !important;
     color: #0f172a !important;
-    font-size: 11pt !important;
+    font-size: 10pt !important;
+    margin: 0 !important;
+    padding: 0 !important;
   }
   
-  body::before,
   .no-print,
   .video-background,
   .btn,
   .filter-panel,
   form,
-  .modal-overlay,
-  th:last-child,
-  td:last-child {
+  .modal-overlay {
     display: none !important;
   }
   
-  .glass-panel {
-    background: transparent !important;
-    backdrop-filter: none !important;
-    -webkit-backdrop-filter: none !important;
-    border: none !important;
-    box-shadow: none !important;
-    padding: 0 !important;
-    margin-bottom: 1.5rem !important;
-    transform: none !important;
+  .print-report-container {
+    display: flex !important;
+    flex-direction: column !important;
+    background: #ffffff !important;
+    font-family: 'Inter', system-ui, sans-serif !important;
+    line-height: 1.4 !important;
+    padding: 1.5cm !important;
+    width: 210mm !important; /* A4 width */
+    height: 297mm !important; /* A4 height */
+    box-sizing: border-box !important;
+    position: relative !important;
+    page-break-after: avoid !important;
   }
-  
-  header.glass-panel {
-    border-bottom: 2px solid #0f172a !important;
-    padding-bottom: 0.5rem !important;
-    margin-bottom: 2rem !important;
+
+  .print-header {
     display: flex !important;
     justify-content: space-between !important;
-    align-items: flex-end !important;
+    align-items: flex-start !important;
+    border-bottom: 2px solid #e2e8f0 !important;
+    padding-bottom: 1.25rem !important;
+    margin-bottom: 1.25rem !important;
   }
-  
-  section {
+
+  .print-title {
+    font-size: 1.8rem !important;
+    font-weight: 800 !important;
+    color: #1e3a8a !important;
+    letter-spacing: -0.03em !important;
+    margin: 0 !important;
+    border-left: 5px solid #4f46e5 !important;
+    padding-left: 0.75rem !important;
+  }
+
+  .print-subtitle {
+    font-size: 0.85rem !important;
+    color: #64748b !important;
+    margin-top: 0.25rem !important;
+    margin-left: 0.75rem !important;
+    font-weight: 500 !important;
+  }
+
+  .print-meta-label {
+    font-size: 0.65rem !important;
+    font-weight: 700 !important;
+    text-transform: uppercase !important;
+    color: #64748b !important;
+    margin: 0 !important;
+    margin-left: 0.75rem !important;
+    letter-spacing: 0.05em !important;
+  }
+
+  .print-meta-val {
+    font-size: 0.85rem !important;
+    font-weight: 600 !important;
+    color: #0f172a !important;
+    margin: 0 !important;
+    margin-left: 0.75rem !important;
+  }
+
+  .print-total-badge {
+    background-color: #f5f3ff !important;
+    border: 1.5px solid #ddd6fe !important;
+    border-radius: 8px !important;
+    padding: 0.85rem 1.25rem !important;
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: flex-end !important;
+    min-width: 180px !important;
+  }
+
+  .print-badge-label {
+    font-size: 0.65rem !important;
+    font-weight: 700 !important;
+    text-transform: uppercase !important;
+    color: #6d28d9 !important;
+    letter-spacing: 0.05em !important;
+  }
+
+  .print-badge-val {
+    font-size: 1.6rem !important;
+    font-weight: 850 !important;
+    color: #1e1b4b !important;
+    margin: 0.1rem 0 !important;
+  }
+
+  .print-badge-sub {
+    font-size: 0.75rem !important;
+    font-weight: 600 !important;
+    color: #6d28d9 !important;
+  }
+
+  .print-details-grid {
     display: grid !important;
-    grid-template-columns: repeat(3, 1fr) !important;
-    gap: 1rem !important;
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 1.5rem !important;
+    margin-bottom: 1.25rem !important;
+  }
+
+  .print-party-box {
+    border: 1px solid #e2e8f0 !important;
+    background-color: #f8fafc !important;
+    padding: 0.75rem 1rem !important;
+    border-radius: 6px !important;
+  }
+
+  .print-sec-title {
+    font-size: 0.65rem !important;
+    font-weight: 700 !important;
+    text-transform: uppercase !important;
+    color: #4f46e5 !important;
+    margin-bottom: 0.25rem !important;
+    letter-spacing: 0.05em !important;
+  }
+
+  .print-party-name {
+    font-size: 0.9rem !important;
+    font-weight: 700 !important;
+    color: #0f172a !important;
+    margin: 0 !important;
+  }
+
+  .print-party-text {
+    font-size: 0.8rem !important;
+    color: #475569 !important;
+    margin: 0 !important;
+  }
+
+  .print-filter-summary {
+    font-size: 0.8rem !important;
+    background-color: #f1f5f9 !important;
+    padding: 0.5rem 1rem !important;
+    border-radius: 6px !important;
+    margin-bottom: 1.25rem !important;
+    color: #334155 !important;
+  }
+
+  .print-table {
+    width: 100% !important;
+    border-collapse: collapse !important;
     margin-bottom: 2rem !important;
   }
-  
-  .table-wrapper {
-    border: 1px solid #94a3b8 !important;
-    box-shadow: none !important;
-    overflow: visible !important;
+
+  .print-table th {
+    background-color: #0f172a !important;
+    color: #ffffff !important;
+    font-size: 0.75rem !important;
+    font-weight: 700 !important;
+    text-transform: uppercase !important;
+    letter-spacing: 0.05em !important;
+    padding: 0.55rem 0.75rem !important;
+    text-align: left !important;
   }
-  
-  .custom-table {
-    width: 100% !important;
-    page-break-inside: auto !important;
+
+  .print-table th:first-child {
+    border-top-left-radius: 4px !important;
+    border-bottom-left-radius: 4px !important;
   }
-  
-  .custom-table tr {
-    page-break-inside: avoid !important;
-    page-break-after: auto !important;
-    transform: none !important;
+
+  .print-table th:last-child {
+    border-top-right-radius: 4px !important;
+    border-bottom-right-radius: 4px !important;
+    text-align: right !important;
   }
-  
-  .custom-table th {
-    background-color: #f1f5f9 !important;
+
+  .print-table td {
+    padding: 0.5rem 0.75rem !important;
+    border-bottom: 1px solid #e2e8f0 !important;
+    font-size: 0.8rem !important;
+    color: #334155 !important;
+  }
+
+  .print-table tbody tr:nth-child(even) td {
+    background-color: #f8fafc !important;
+  }
+
+  .print-table-total-row td {
+    border-top: 2.5px solid #0f172a !important;
+    border-bottom: 3px double #0f172a !important;
+    font-weight: 700 !important;
     color: #0f172a !important;
-    border-bottom: 2px solid #94a3b8 !important;
-    padding: 0.6rem 0.8rem !important;
+    background-color: #f8fafc !important;
   }
-  
-  .custom-table td {
-    border-bottom: 1px solid #cbd5e1 !important;
-    padding: 0.6rem 0.8rem !important;
-    background-color: transparent !important;
+
+  .print-signatures-container {
+    display: flex !important;
+    justify-content: space-between !important;
+    margin-top: auto !important; /* Pushes signature block to the bottom of A4 page */
+    margin-bottom: 2.5rem !important;
+    padding-top: 1rem !important;
+  }
+
+  .print-signature-box {
+    width: 45% !important;
+  }
+
+  .print-sig-line {
+    border-top: 1px solid #94a3b8 !important;
+    width: 100% !important;
+    margin-bottom: 0.35rem !important;
+  }
+
+  .print-sig-label {
+    font-size: 0.75rem !important;
+    font-weight: 700 !important;
+    color: #0f172a !important;
+    margin: 0 !important;
+  }
+
+  .print-sig-sub {
+    font-size: 0.65rem !important;
+    color: #64748b !important;
+    margin: 0 !important;
+  }
+
+  .print-footer {
+    display: flex !important;
+    justify-content: space-between !important;
+    border-top: 1.5px solid #e2e8f0 !important;
+    padding-top: 0.75rem !important;
+    font-size: 0.7rem !important;
+    color: #94a3b8 !important;
   }
 }

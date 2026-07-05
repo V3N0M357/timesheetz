@@ -959,98 +959,110 @@ export default function DashboardClient({ initialEntries }: DashboardClientProps
     {/* Beautiful PDF Report Container (Printed only, hidden on screen) */}
     <div className="print-report-container">
       <div className="print-header">
-        <div>
-          <h1 className="print-title">TIMESHEET REPORT</h1>
-          <p className="print-subtitle">Generated Work Log Summary Report</p>
-        </div>
-        <div style={{ textAlign: "right" }}>
-          <p className="print-meta-label">Generated On</p>
-          <p className="print-meta-val">
-            {new Date().toLocaleDateString("en-US", {
-              year: "numeric",
-              month: "long",
-              day: "numeric",
-            })}
-          </p>
-        </div>
-      </div>
-
-      <div className="print-details">
-        <div>
-          <h3 className="print-sec-title">Owner Details</h3>
-          <p className="print-text" style={{ fontWeight: "600" }}>Default Timesheetz User</p>
-          <p className="print-text" style={{ color: "#64748b", fontSize: "0.8rem", marginTop: "0.1rem" }}>
-            default@example.com
-          </p>
-        </div>
-        <div style={{ textAlign: "right" }}>
-          <h3 className="print-sec-title">Report Summary</h3>
-          <p className="print-text">
-            Period: {timePeriod === "all" ? "All Time" : timePeriod.replace("-", " ")}
-          </p>
-          {(fromDate || toDate) && (
-            <p className="print-text" style={{ fontSize: "0.8rem", color: "#64748b", marginTop: "0.1rem" }}>
-              Range: {fromDate || "Start"} to {toDate || "End"}
+        <div className="print-header-left">
+          <h1 className="print-title">TIMESHEET STATEMENT</h1>
+          <p className="print-subtitle">Statement of logged hours and services rendered</p>
+          
+          <div style={{ marginTop: "1rem" }}>
+            <p className="print-meta-label">Statement Date</p>
+            <p className="print-meta-val">
+              {new Date().toLocaleDateString("en-US", {
+                year: "numeric",
+                month: "long",
+                day: "numeric",
+              })}
             </p>
-          )}
+          </div>
+        </div>
+        
+        <div className="print-header-right">
+          <div className="print-total-badge">
+            <span className="print-badge-label">Statement Total</span>
+            <span className="print-badge-val">{formatCurrency(totalEarnings)}</span>
+            <span className="print-badge-sub">{totalHours.toFixed(1)} hrs logged</span>
+          </div>
         </div>
       </div>
 
-      <div className="print-metrics">
-        <div className="print-card">
-          <span className="print-card-label">Total Earnings</span>
-          <span className="print-card-val" style={{ color: "var(--success)" }}>
-            {formatCurrency(totalEarnings)}
+      <div className="print-details-grid">
+        <div className="print-party-box">
+          <h3 className="print-sec-title">Service Provider</h3>
+          <p className="print-party-name">Default Contractor</p>
+          <p className="print-party-text">default@example.com</p>
+        </div>
+        <div className="print-party-box">
+          <h3 className="print-sec-title">Client Details</h3>
+          <p className="print-party-name">Syrux Projects</p>
+          <p className="print-party-text">syrus-projects-63a53fa2</p>
+        </div>
+      </div>
+
+      <div className="print-filter-summary">
+        <span style={{ fontWeight: "700", color: "#4f46e5" }}>Filter Period: </span>
+        <span>{timePeriod === "all" ? "All Logged History" : timePeriod.replace("-", " ")}</span>
+        {(fromDate || toDate) && (
+          <span style={{ marginLeft: "1.5rem" }}>
+            <span style={{ fontWeight: "700", color: "#4f46e5" }}>Range: </span>
+            <span>{fromDate || "Start"} to {toDate || "End"}</span>
           </span>
-        </div>
-        <div className="print-card">
-          <span className="print-card-label">Total Hours Worked</span>
-          <span className="print-card-val">{totalHours.toFixed(1)} hrs</span>
-        </div>
-        <div className="print-card">
-          <span className="print-card-label">Average Hourly Rate</span>
-          <span className="print-card-val" style={{ color: "var(--accent)" }}>
-            {formatCurrency(averageHourlyRate)}/hr
-          </span>
-        </div>
+        )}
       </div>
 
       <table className="print-table">
         <thead>
           <tr>
             <th style={{ width: "15%" }}>Date Worked</th>
+            <th>Activity Description</th>
             <th style={{ width: "12%", textAlign: "right" }}>Hours</th>
-            <th style={{ width: "15%", textAlign: "right" }}>Hourly Rate</th>
-            <th>Activity (What I Did)</th>
-            <th style={{ width: "18%", textAlign: "right" }}>Total Earned</th>
+            <th style={{ width: "15%", textAlign: "right" }}>Rate / hr</th>
+            <th style={{ width: "18%", textAlign: "right" }}>Line Total</th>
           </tr>
         </thead>
         <tbody>
           {filteredEntries.map((entry) => (
             <tr key={entry.id}>
               <td style={{ fontWeight: "500" }}>{entry.work_date}</td>
-              <td style={{ textAlign: "right" }}>{entry.hours} hrs</td>
-              <td style={{ textAlign: "right" }}>{formatCurrency(entry.hourly_rate)}</td>
               <td style={{ color: "#334155" }}>{entry.description}</td>
-              <td style={{ textAlign: "right", fontWeight: "700", color: "#0f766e" }}>
+              <td style={{ textAlign: "right" }}>{entry.hours.toFixed(1)} hrs</td>
+              <td style={{ textAlign: "right" }}>{formatCurrency(entry.hourly_rate)}</td>
+              <td style={{ textAlign: "right", fontWeight: "700", color: "#1e3a8a" }}>
                 {formatCurrency(entry.hours * entry.hourly_rate)}
               </td>
             </tr>
           ))}
-          {/* Total Summary Row */}
-          <tr style={{ borderTop: "2.5px solid #1e293b", borderBottom: "3px double #1e293b", fontWeight: "700" }}>
+          {/* Table Footer Totals */}
+          <tr className="print-table-total-row">
             <td>TOTALS</td>
+            <td style={{ color: "#64748b", fontStyle: "italic" }}>
+              Summary of {filteredEntries.length} logged items
+            </td>
             <td style={{ textAlign: "right" }}>{totalHours.toFixed(1)} hrs</td>
             <td style={{ textAlign: "right" }}>—</td>
-            <td style={{ color: "#475569" }}>Summary of {filteredEntries.length} logged items</td>
-            <td style={{ textAlign: "right", fontSize: "0.85rem", color: "#0f766e" }}>{formatCurrency(totalEarnings)}</td>
+            <td style={{ textAlign: "right", fontSize: "0.9rem", color: "#1e3a8a" }}>
+              {formatCurrency(totalEarnings)}
+            </td>
           </tr>
         </tbody>
       </table>
 
+      {/* Signatures & Formal Acceptance */}
+      <div className="print-signatures-container">
+        <div className="print-signature-box">
+          <div className="print-sig-line"></div>
+          <p className="print-sig-label">Provider Signature</p>
+          <p className="print-sig-sub">Date: ____ / ____ / ________</p>
+        </div>
+        
+        <div className="print-signature-box">
+          <div className="print-sig-line"></div>
+          <p className="print-sig-label">Client Acceptance Signature</p>
+          <p className="print-sig-sub">Date: ____ / ____ / ________</p>
+        </div>
+      </div>
+
       <div className="print-footer">
-        <span>Thank you for using Timesheetz.</span>
-        <span>Generated dynamically via Timesheetz Web Console</span>
+        <span>Timesheet Statement &copy; {new Date().getFullYear()}</span>
+        <span>Page 1 of 1</span>
       </div>
     </div>
   </>
