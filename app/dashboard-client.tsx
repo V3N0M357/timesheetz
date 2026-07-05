@@ -987,13 +987,13 @@ export default function DashboardClient({ initialEntries }: DashboardClientProps
       <div className="print-details-grid">
         <div className="print-party-box">
           <h3 className="print-sec-title">Service Provider</h3>
-          <p className="print-party-name">Default Contractor</p>
-          <p className="print-party-text">default@example.com</p>
+          <p className="print-party-name">Steve Katen</p>
+          <p className="print-party-text">stevekaten@gmail.com</p>
         </div>
         <div className="print-party-box">
           <h3 className="print-sec-title">Client Details</h3>
-          <p className="print-party-name">Syrux Projects</p>
-          <p className="print-party-text">syrus-projects-63a53fa2</p>
+          <p className="print-party-name">Syrus</p>
+          <p className="print-party-text">syrus</p>
         </div>
       </div>
 
