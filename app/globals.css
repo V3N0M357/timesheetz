@@ -385,6 +385,8 @@ a {
     font-size: 10pt !important;
     margin: 0 !important;
     padding: 0 !important;
+    height: 100% !important;
+    overflow: hidden !important;
   }
   
   .no-print,
@@ -402,12 +404,14 @@ a {
     background: #ffffff !important;
     font-family: 'Inter', system-ui, sans-serif !important;
     line-height: 1.4 !important;
-    padding: 1.5cm !important;
-    width: 210mm !important; /* A4 width */
-    height: 297mm !important; /* A4 height */
+    padding: 1.2cm !important;
+    width: 100% !important;
+    height: 100% !important;
     box-sizing: border-box !important;
     position: relative !important;
+    overflow: hidden !important;
     page-break-after: avoid !important;
+    page-break-before: avoid !important;
   }
 
   .print-header {
