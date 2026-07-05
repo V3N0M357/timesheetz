@@ -370,3 +370,86 @@ a {
 .modal-scroll-area::-webkit-scrollbar-thumb:hover {
   background: #94a3b8;
 }
+
+/* Print Specific Styles for Professional PDF Layouts */
+@media print {
+  @page {
+    margin: 1.6cm 1.2cm;
+    size: portrait;
+  }
+  
+  html, body {
+    background: #ffffff !important;
+    background-image: none !important;
+    color: #0f172a !important;
+    font-size: 11pt !important;
+  }
+  
+  body::before,
+  .video-background,
+  .btn,
+  .filter-panel,
+  form,
+  .modal-overlay,
+  th:last-child,
+  td:last-child {
+    display: none !important;
+  }
+  
+  .glass-panel {
+    background: transparent !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    border: none !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+    margin-bottom: 1.5rem !important;
+    transform: none !important;
+  }
+  
+  header.glass-panel {
+    border-bottom: 2px solid #0f172a !important;
+    padding-bottom: 0.5rem !important;
+    margin-bottom: 2rem !important;
+    display: flex !important;
+    justify-content: space-between !important;
+    align-items: flex-end !important;
+  }
+  
+  section {
+    display: grid !important;
+    grid-template-columns: repeat(3, 1fr) !important;
+    gap: 1rem !important;
+    margin-bottom: 2rem !important;
+  }
+  
+  .table-wrapper {
+    border: 1px solid #94a3b8 !important;
+    box-shadow: none !important;
+    overflow: visible !important;
+  }
+  
+  .custom-table {
+    width: 100% !important;
+    page-break-inside: auto !important;
+  }
+  
+  .custom-table tr {
+    page-break-inside: avoid !important;
+    page-break-after: auto !important;
+    transform: none !important;
+  }
+  
+  .custom-table th {
+    background-color: #f1f5f9 !important;
+    color: #0f172a !important;
+    border-bottom: 2px solid #94a3b8 !important;
+    padding: 0.6rem 0.8rem !important;
+  }
+  
+  .custom-table td {
+    border-bottom: 1px solid #cbd5e1 !important;
+    padding: 0.6rem 0.8rem !important;
+    background-color: transparent !important;
+  }
+}

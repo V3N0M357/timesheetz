@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { addWorkEntryAction, deleteWorkEntryAction, updateWorkEntryAction, addMultipleWorkEntriesAction } from "./actions/workActions";
-import { Clock, DollarSign, Search, Trash2, Plus, Calendar, Briefcase, TrendingUp, Download, Mail, Edit2, Check, X, Layers, Filter } from "lucide-react";
+import { Clock, DollarSign, Search, Trash2, Plus, Calendar, Briefcase, TrendingUp, Download, Mail, Edit2, Check, X, Layers, Filter, FileText } from "lucide-react";
 
 interface WorkEntry {
   id: string;
@@ -236,6 +236,18 @@ export default function DashboardClient({ initialEntries }: DashboardClientProps
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+  };
+
+  const downloadPDF = () => {
+    if (filteredEntries.length === 0) {
+      alert("No data available to print matching current filters.");
+      return;
+    }
+    const originalTitle = document.title;
+    const filterDesc = timePeriod !== "all" ? `_${timePeriod}` : (fromDate || toDate ? "_filtered_range" : "");
+    document.title = `Timesheet_Report${filterDesc}_${new Date().toISOString().split("T")[0]}`;
+    window.print();
+    document.title = originalTitle;
   };
 
   // 5. Email timesheet composer
@@ -589,6 +601,10 @@ export default function DashboardClient({ initialEntries }: DashboardClientProps
             <button className="btn" onClick={downloadCSV} title="Export spreadsheet data" style={{ display: "flex", alignItems: "center", gap: "0.35rem", padding: "0.45rem 0.85rem", fontSize: "0.8rem" }}>
               <Download size={14} />
               <span>{getDownloadButtonLabel()}</span>
+            </button>
+            <button className="btn" onClick={downloadPDF} title="Download printable PDF report" style={{ display: "flex", alignItems: "center", gap: "0.35rem", padding: "0.45rem 0.85rem", fontSize: "0.8rem" }}>
+              <FileText size={14} />
+              <span>Download PDF</span>
             </button>
             <button className="btn" onClick={emailTimesheet} title="Send work report by email" style={{ display: "flex", alignItems: "center", gap: "0.35rem", padding: "0.45rem 0.85rem", fontSize: "0.8rem" }}>
               <Mail size={14} />
