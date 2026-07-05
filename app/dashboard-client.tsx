@@ -1045,20 +1045,7 @@ export default function DashboardClient({ initialEntries }: DashboardClientProps
         </tbody>
       </table>
 
-      {/* Signatures & Formal Acceptance */}
-      <div className="print-signatures-container">
-        <div className="print-signature-box">
-          <div className="print-sig-line"></div>
-          <p className="print-sig-label">Provider Signature</p>
-          <p className="print-sig-sub">Date: ____ / ____ / ________</p>
-        </div>
-        
-        <div className="print-signature-box">
-          <div className="print-sig-line"></div>
-          <p className="print-sig-label">Client Acceptance Signature</p>
-          <p className="print-sig-sub">Date: ____ / ____ / ________</p>
-        </div>
-      </div>
+
 
       <div className="print-footer">
         <span>Timesheet Statement &copy; {new Date().getFullYear()}</span>
