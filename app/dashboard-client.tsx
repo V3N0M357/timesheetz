@@ -1032,11 +1032,19 @@ export default function DashboardClient({ initialEntries }: DashboardClientProps
               <td style={{ textAlign: "right" }}>{entry.hours} hrs</td>
               <td style={{ textAlign: "right" }}>{formatCurrency(entry.hourly_rate)}</td>
               <td style={{ color: "#334155" }}>{entry.description}</td>
-              <td style={{ textAlign: "right", fontWeight: "700", color: "var(--success)" }}>
+              <td style={{ textAlign: "right", fontWeight: "700", color: "#0f766e" }}>
                 {formatCurrency(entry.hours * entry.hourly_rate)}
               </td>
             </tr>
           ))}
+          {/* Total Summary Row */}
+          <tr style={{ borderTop: "2.5px solid #1e293b", borderBottom: "3px double #1e293b", fontWeight: "700" }}>
+            <td>TOTALS</td>
+            <td style={{ textAlign: "right" }}>{totalHours.toFixed(1)} hrs</td>
+            <td style={{ textAlign: "right" }}>—</td>
+            <td style={{ color: "#475569" }}>Summary of {filteredEntries.length} logged items</td>
+            <td style={{ textAlign: "right", fontSize: "0.85rem", color: "#0f766e" }}>{formatCurrency(totalEarnings)}</td>
+          </tr>
         </tbody>
       </table>
 
