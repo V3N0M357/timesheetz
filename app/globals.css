@@ -386,6 +386,7 @@ a {
   }
   
   body::before,
+  .no-print,
   .video-background,
   .btn,
   .filter-panel,
