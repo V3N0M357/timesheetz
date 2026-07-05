@@ -188,9 +188,33 @@ export default function DashboardClient({ initialEntries }: DashboardClientProps
   };
 
   // 4. CSV Downloader
+  const getCSVFilename = () => {
+    const dateToday = new Date().toISOString().split("T")[0];
+    if (fromDate || toDate) {
+      const start = fromDate || "start";
+      const end = toDate || "end";
+      return `timesheet_${start}_to_${end}.csv`;
+    }
+    if (timePeriod !== "all") {
+      return `timesheet_${timePeriod}.csv`;
+    }
+    return `timesheet_all_time_${dateToday}.csv`;
+  };
+
+  const getDownloadButtonLabel = () => {
+    if (fromDate || toDate) return "Download Range CSV";
+    if (timePeriod !== "all") {
+      if (timePeriod === "this-month") return "Download This Month CSV";
+      if (timePeriod === "last-month") return "Download Last Month CSV";
+      if (timePeriod === "this-year") return "Download This Year CSV";
+      if (timePeriod === "last-year") return "Download Last Year CSV";
+    }
+    return "Download All CSV";
+  };
+
   const downloadCSV = () => {
-    if (entries.length === 0) {
-      alert("No data available to export.");
+    if (filteredEntries.length === 0) {
+      alert("No data available to export matching current filters.");
       return;
     }
     
@@ -208,7 +232,7 @@ export default function DashboardClient({ initialEntries }: DashboardClientProps
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.setAttribute("href", url);
-    link.setAttribute("download", `timesheetz_${new Date().toISOString().split("T")[0]}.csv`);
+    link.setAttribute("download", getCSVFilename());
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -564,7 +588,7 @@ export default function DashboardClient({ initialEntries }: DashboardClientProps
           <div style={{ display: "flex", gap: "0.75rem" }}>
             <button className="btn" onClick={downloadCSV} title="Export spreadsheet data" style={{ display: "flex", alignItems: "center", gap: "0.35rem", padding: "0.45rem 0.85rem", fontSize: "0.8rem" }}>
               <Download size={14} />
-              <span>Download CSV</span>
+              <span>{getDownloadButtonLabel()}</span>
             </button>
             <button className="btn" onClick={emailTimesheet} title="Send work report by email" style={{ display: "flex", alignItems: "center", gap: "0.35rem", padding: "0.45rem 0.85rem", fontSize: "0.8rem" }}>
               <Mail size={14} />
