@@ -462,7 +462,7 @@ export async function autoFillMonthAction(
       args: [`${monthStr}%`]
     });
 
-    // 2. Find weekdays in the month
+    // 2. Find weekdays in the month (Mon-Fri)
     const daysInMonth = new Date(year, month, 0).getDate();
     const weekdays: string[] = [];
     for (let d = 1; d <= daysInMonth; d++) {
@@ -480,38 +480,37 @@ export async function autoFillMonthAction(
       return { error: "No valid weekdays found in selected month" };
     }
 
-    // 3. Generate session hours strictly between 0.5 and 6.0 hrs
-    let remainingMoney = targetEarnings;
+    // 3. Convert target earnings into 0.5-hour blocks (each block = 0.5h)
+    let targetHalfHours = Math.round((targetEarnings / hourlyRate) * 2);
+    if (targetHalfHours < 1) targetHalfHours = 1;
+
+    let remainingHalfHours = targetHalfHours;
     const sessions: { date: string; hours: number; rate: number }[] = [];
     const availableDays = [...weekdays].sort(() => Math.random() - 0.5);
 
     let dayIdx = 0;
-    while (remainingMoney > 0.01 && dayIdx < availableDays.length) {
+    while (remainingHalfHours > 0 && dayIdx < availableDays.length) {
       const dateStr = availableDays[dayIdx++];
-      
-      let targetHours = 0;
-      let rate = hourlyRate;
 
-      const maxMoneyFor6Hrs = 6.0 * hourlyRate;
-      if (remainingMoney <= maxMoneyFor6Hrs) {
-        targetHours = Math.round((remainingMoney / hourlyRate) * 10) / 10;
-        if (targetHours < 0.5) targetHours = 0.5;
-        if (targetHours > 6.0) targetHours = 6.0;
-        rate = Math.round((remainingMoney / targetHours) * 100) / 100;
-        remainingMoney = 0;
+      let chosenHalfHours = 0;
+      if (remainingHalfHours <= 12) { // 12 half-hours = 6.0 hours max per day
+        chosenHalfHours = remainingHalfHours;
       } else {
-        const possibleSteps = [1.5, 2.0, 2.5, 3.0, 3.5, 4.0, 4.5, 5.0, 5.5, 6.0];
-        targetHours = possibleSteps[Math.floor(Math.random() * possibleSteps.length)];
-        const sessionEarned = targetHours * rate;
-        remainingMoney = Math.round((remainingMoney - sessionEarned) * 100) / 100;
+        // Pick random session length between 1.5h (3 blocks) and 6.0h (12 blocks)
+        const possibleBlocks = [3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
+        chosenHalfHours = possibleBlocks[Math.floor(Math.random() * possibleBlocks.length)];
       }
 
-      sessions.push({ date: dateStr, hours: targetHours, rate });
+      remainingHalfHours -= chosenHalfHours;
+      const hours = chosenHalfHours * 0.5;
+
+      sessions.push({ date: dateStr, hours, rate: hourlyRate });
     }
 
+    // Sort sessions by date ascending
     sessions.sort((a, b) => a.date.localeCompare(b.date));
 
-    // 4. Generate AI descriptions matching session hours
+    // 4. Generate AI descriptions matching each session's exact hours
     const pastDescs = sessions.map(s => `Session ${s.hours} hours`);
     const generatedEntries = [];
     const batchQueries = [];
