@@ -496,6 +496,16 @@ export default function DashboardClient({ initialEntries }: DashboardClientProps
     };
   };
 
+  // Helper to generate dynamic label for relative months (e.g. 2 Months Ago (Aug))
+  const getRelativeMonthLabel = (monthsBack: number) => {
+    const today = new Date();
+    const d = new Date(today.getFullYear(), today.getMonth() - monthsBack, 1);
+    const monthName = d.toLocaleString("default", { month: "short", year: "numeric" });
+    if (monthsBack === 0) return `This Month (${monthName})`;
+    if (monthsBack === 1) return `Last Month (${monthName})`;
+    return `${monthsBack} Months Ago (${monthName})`;
+  };
+
   // Helper: check if a date falls in a selected time period
   const isInTimePeriod = (dateStr: string) => {
     if (!dateStr || timePeriod === "all") return true;
@@ -512,10 +522,29 @@ export default function DashboardClient({ initialEntries }: DashboardClientProps
     if (timePeriod === "this-month") {
       return entryDate.getFullYear() === currentYear && entryDate.getMonth() === currentMonth;
     }
-    if (timePeriod === "last-month") {
-      const targetMonth = currentMonth === 0 ? 11 : currentMonth - 1;
-      const targetYear = currentMonth === 0 ? currentYear - 1 : currentYear;
-      return entryDate.getFullYear() === targetYear && entryDate.getMonth() === targetMonth;
+    if (timePeriod === "last-month" || timePeriod === "1-month-ago") {
+      const target = new Date(currentYear, currentMonth - 1, 1);
+      return entryDate.getFullYear() === target.getFullYear() && entryDate.getMonth() === target.getMonth();
+    }
+    if (timePeriod === "2-months-ago") {
+      const target = new Date(currentYear, currentMonth - 2, 1);
+      return entryDate.getFullYear() === target.getFullYear() && entryDate.getMonth() === target.getMonth();
+    }
+    if (timePeriod === "3-months-ago") {
+      const target = new Date(currentYear, currentMonth - 3, 1);
+      return entryDate.getFullYear() === target.getFullYear() && entryDate.getMonth() === target.getMonth();
+    }
+    if (timePeriod === "4-months-ago") {
+      const target = new Date(currentYear, currentMonth - 4, 1);
+      return entryDate.getFullYear() === target.getFullYear() && entryDate.getMonth() === target.getMonth();
+    }
+    if (timePeriod === "5-months-ago") {
+      const target = new Date(currentYear, currentMonth - 5, 1);
+      return entryDate.getFullYear() === target.getFullYear() && entryDate.getMonth() === target.getMonth();
+    }
+    if (timePeriod === "6-months-ago") {
+      const target = new Date(currentYear, currentMonth - 6, 1);
+      return entryDate.getFullYear() === target.getFullYear() && entryDate.getMonth() === target.getMonth();
     }
     if (timePeriod === "last-30-days") {
       const diffTime = startOfToday.getTime() - entryDate.getTime();
@@ -756,8 +785,13 @@ export default function DashboardClient({ initialEntries }: DashboardClientProps
               className="filter-select"
             >
               <option value="all">All Logged History</option>
-              <option value="this-month">This Month ({new Date().toLocaleString('default', { month: 'short' })})</option>
-              <option value="last-month">Last Month</option>
+              <option value="this-month">{getRelativeMonthLabel(0)}</option>
+              <option value="last-month">{getRelativeMonthLabel(1)}</option>
+              <option value="2-months-ago">{getRelativeMonthLabel(2)}</option>
+              <option value="3-months-ago">{getRelativeMonthLabel(3)}</option>
+              <option value="4-months-ago">{getRelativeMonthLabel(4)}</option>
+              <option value="5-months-ago">{getRelativeMonthLabel(5)}</option>
+              <option value="6-months-ago">{getRelativeMonthLabel(6)}</option>
               <option value="last-30-days">Past 30 Days</option>
               <option value="last-60-days">Past 60 Days</option>
               <option value="last-90-days">Past 90 Days</option>
