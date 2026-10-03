@@ -836,17 +836,13 @@ export default function DashboardClient({ initialEntries }: DashboardClientProps
           <h3 style={{ fontSize: "1.1rem", fontWeight: "700" }}>Work History Log</h3>
           
           <div style={{ display: "flex", gap: "0.75rem", flexWrap: "wrap" }}>
-            <button className="btn" onClick={() => setIsPDFModalOpen(true)} title="Generate PDF for specific month, year, or custom date range" style={{ display: "flex", alignItems: "center", gap: "0.35rem", padding: "0.45rem 0.85rem", fontSize: "0.8rem", border: "1px solid var(--primary)", color: "var(--primary)" }}>
+            <button className="btn" onClick={() => setIsPDFModalOpen(true)} title="Generate PDF for specific month, year, or custom date range" style={{ display: "flex", alignItems: "center", gap: "0.35rem", padding: "0.45rem 0.85rem", fontSize: "0.8rem", border: "1.5px solid var(--primary)", color: "var(--primary)" }}>
               <Printer size={14} />
               <span>PDF for Month / Year</span>
             </button>
             <button className="btn" onClick={downloadCSV} title="Export spreadsheet data" style={{ display: "flex", alignItems: "center", gap: "0.35rem", padding: "0.45rem 0.85rem", fontSize: "0.8rem" }}>
               <Download size={14} />
               <span>{getDownloadButtonLabel()}</span>
-            </button>
-            <button className="btn" onClick={downloadPDF} title="Download printable PDF report for current view" style={{ display: "flex", alignItems: "center", gap: "0.35rem", padding: "0.45rem 0.85rem", fontSize: "0.8rem" }}>
-              <FileText size={14} />
-              <span>Download PDF</span>
             </button>
             <button className="btn" onClick={emailTimesheet} title="Send work report by email" style={{ display: "flex", alignItems: "center", gap: "0.35rem", padding: "0.45rem 0.85rem", fontSize: "0.8rem" }}>
               <Mail size={14} />
