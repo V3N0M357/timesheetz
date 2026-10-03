@@ -4,6 +4,66 @@ import { db } from "@/src/db/client";
 import { revalidatePath } from "next/cache";
 import crypto from "crypto";
 
+const QA_PROMPT_BANK = [
+  // Functionality testing
+  "Tested navigation links and buttons across all primary site views",
+  "Tested common user workflows from start to finish to ensure smooth end-to-end user journeys",
+  "Tested forms with valid and invalid information to verify client and server validation handling",
+  "Checked error messages and confirmation messages for clarity and accuracy",
+  "Verified search, filtering, and sorting features across historical dataset",
+  "Tested login, logout, registration, and password-reset functions",
+  "Checked downloads, videos, and embedded media content rendering",
+  "Retested open issues after they were marked as resolved by engineering",
+
+  // Browser and device testing
+  "Tested the application across Chrome, Safari, Firefox, and Edge browsers",
+  "Tested site layout and responsiveness on desktop, tablet, and mobile screen sizes",
+  "Checked screen layouts in both portrait and landscape orientation",
+  "Resized the browser window dynamically and checked fluid container layouts",
+  "Tested navigation menus, buttons, and input forms on touchscreen mobile devices",
+  "Checked page performance and fallback behavior with slow or spotty network connections",
+
+  // Visual and content review
+  "Inspected site assets for broken, missing, stretched, or blurry image rendering",
+  "Checked UI layout for overlapping, cut-off, or misaligned visual components",
+  "Audited visual styles for inconsistent fonts, colors, spacing, and button variants",
+  "Proofread all visible interface text for spelling and grammatical consistency",
+  "Audited interface for placeholder text, outdated labels, or duplicate content",
+  "Verified contact information, billing dates, prices, and displayed numerical totals",
+
+  // Usability and accessibility
+  "Observed users completing key tasks and recorded usability friction points",
+  "Verified whether each section and screen clearly communicates its core purpose",
+  "Tested keyboard navigation using Tab and Enter keys without a mouse",
+  "Checked page usability, container wrapping, and text clarity at increased zoom levels",
+  "Verified that all form fields, labels, instructions, and inline errors are clear and accessible",
+
+  // Bug reporting and project support
+  "Documented bug reports, verified reproduction steps, and supported dev team fixes"
+];
+
+const VARIATION_PREFIXES = [
+  "Thoroughly ",
+  "Executed comprehensive pass: ",
+  "Validated and ",
+  "Completed QA session: ",
+  "Systematically ",
+  "Audited & ",
+  "Performed detailed check: ",
+  "Finished regression run: "
+];
+
+const VARIATION_SUFFIXES = [
+  " for production release.",
+  " across desktop and mobile viewports.",
+  " under high-concurrency loads.",
+  " following recent UI updates.",
+  " in dark glass theme mode.",
+  " prior to staging deployment.",
+  " with edge-case test datasets.",
+  " and updated testing documentation."
+];
+
 export async function addWorkEntryAction(prevState: any, formData: FormData) {
   const userId = "default-user";
 
@@ -40,7 +100,18 @@ export async function addWorkEntryAction(prevState: any, formData: FormData) {
     });
 
     revalidatePath("/");
-    return { success: true };
+    return { 
+      success: true, 
+      entry: { 
+        id, 
+        user_id: userId, 
+        work_date: workDate, 
+        hours, 
+        hourly_rate: hourlyRate, 
+        description, 
+        created_at: createdAt 
+      } 
+    };
   } catch (error: any) {
     console.error("Add work entry error:", error);
     return { error: "Failed to save work entry. Verify database connection." };
@@ -111,9 +182,19 @@ export async function addMultipleWorkEntriesAction(entries: { work_date: string;
   }
 
   try {
+    const createdEntries: any[] = [];
     const queries = entries.map((entry) => {
       const id = crypto.randomUUID();
       const createdAt = new Date().toISOString();
+      createdEntries.push({
+        id,
+        user_id: userId,
+        work_date: entry.work_date,
+        hours: entry.hours,
+        hourly_rate: entry.hourly_rate,
+        description: entry.description,
+        created_at: createdAt
+      });
       return {
         sql: `
           INSERT INTO work_entries (id, user_id, work_date, hours, hourly_rate, description, created_at)
@@ -125,9 +206,74 @@ export async function addMultipleWorkEntriesAction(entries: { work_date: string;
 
     await db.batch(queries);
     revalidatePath("/");
-    return { success: true };
+    return { success: true, entries: createdEntries };
   } catch (error: any) {
     console.error("Batch add work entries error:", error);
     return { error: "Failed to save multiple work entries. Verify database connection." };
+  }
+}
+
+export async function generateAIDescriptionAction(pastDescriptions: string[] = [], customPrompt: string = "") {
+  try {
+    const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
+    if (apiKey) {
+      const sampleDescriptions = pastDescriptions.filter(Boolean).slice(0, 10).join("\n- ");
+      const promptText = `You are an AI assistant generating QA timesheet descriptions.
+User's Custom AI Prompt/Focus: ${customPrompt ? customPrompt : "Generate QA testing tasks matching user's work"}
+Past User Work Logs:
+${sampleDescriptions ? `- ${sampleDescriptions}` : "- Tested user interface and API workflows"}
+
+Base QA Tasks Pool:
+${QA_PROMPT_BANK.slice(0, 10).map(t => `- ${t}`).join("\n")}
+
+Generate ONE unique, professional 1-sentence work entry description.
+Each time you generate, slightly alter the wording, focus, or phrasing so no two outputs are identical.
+Do NOT include quotes, bullet points, or extra formatting. Return ONLY the description text.`;
+
+      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: promptText }] }]
+        })
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        const text = data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
+        if (text) {
+          return { description: text.replace(/^["']|["']$/g, '') };
+        }
+      }
+    }
+
+    // Dynamic AI Variation Engine using QA Prompts Bank + Custom Prompt Modifiers
+    let basePrompt = "";
+    if (customPrompt.trim()) {
+      basePrompt = customPrompt.trim();
+    } else {
+      const randomIndex = Math.floor(Math.random() * QA_PROMPT_BANK.length);
+      basePrompt = QA_PROMPT_BANK[randomIndex];
+    }
+
+    const prefix = VARIATION_PREFIXES[Math.floor(Math.random() * VARIATION_PREFIXES.length)];
+    const suffix = VARIATION_SUFFIXES[Math.floor(Math.random() * VARIATION_SUFFIXES.length)];
+
+    // Capitalize & assemble slightly altered version each time
+    let altered = basePrompt.charAt(0).toLowerCase() + basePrompt.slice(1);
+    if (prefix.endsWith(": ")) {
+      altered = prefix + basePrompt + suffix;
+    } else {
+      altered = prefix + altered + suffix;
+    }
+
+    // Clean up trailing double periods
+    altered = altered.replace(/\.\./g, '.');
+
+    return { description: altered };
+
+  } catch (err) {
+    console.error("AI Description error:", err);
+    return { description: "Thoroughly tested navigation links and buttons across desktop and mobile viewports." };
   }
 }

@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
-import { addWorkEntryAction, deleteWorkEntryAction, updateWorkEntryAction, addMultipleWorkEntriesAction } from "./actions/workActions";
-import { Clock, DollarSign, Search, Trash2, Plus, Calendar, Briefcase, TrendingUp, Download, Mail, Edit2, Check, X, Layers, Filter, FileText } from "lucide-react";
+import { useState, useEffect } from "react";
+import { addWorkEntryAction, deleteWorkEntryAction, updateWorkEntryAction, addMultipleWorkEntriesAction, generateAIDescriptionAction } from "./actions/workActions";
+import { Clock, DollarSign, Search, Trash2, Plus, Calendar, Briefcase, TrendingUp, Download, Mail, Edit2, Check, X, Layers, Filter, FileText, Sparkles, Sliders } from "lucide-react";
 
 interface WorkEntry {
   id: string;
@@ -23,6 +23,11 @@ export default function DashboardClient({ initialEntries }: DashboardClientProps
   const [searchQuery, setSearchQuery] = useState("");
   const [formError, setFormError] = useState<string | null>(null);
   const [isAdding, setIsAdding] = useState(false);
+  const [isGeneratingAI, setIsGeneratingAI] = useState(false);
+  const [massAddLoadingIndex, setMassAddLoadingIndex] = useState<number | null>(null);
+
+  // Single Add Work Session Modal State
+  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
 
   // Inline Editing States
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -64,6 +69,42 @@ export default function DashboardClient({ initialEntries }: DashboardClientProps
   const [hourlyRate, setHourlyRate] = useState("");
   const [description, setDescription] = useState("");
 
+  // Custom AI Prompt state
+  const [customAIPrompt, setCustomAIPrompt] = useState("");
+  const [showPromptInput, setShowPromptInput] = useState(false);
+
+  // AI Description Generator for single form
+  const handleGenerateAIDescription = async () => {
+    setIsGeneratingAI(true);
+    const pastDescs = entries.map((e) => e.description);
+    try {
+      const res = await generateAIDescriptionAction(pastDescs, customAIPrompt);
+      if (res && res.description) {
+        setDescription(res.description);
+      }
+    } catch (err) {
+      console.error("AI Generator Error:", err);
+    } finally {
+      setIsGeneratingAI(false);
+    }
+  };
+
+  // AI Description Generator for Mass Add Modal
+  const handleMassGenerateAI = async (index: number) => {
+    setMassAddLoadingIndex(index);
+    const pastDescs = entries.map((e) => e.description);
+    try {
+      const res = await generateAIDescriptionAction(pastDescs, customAIPrompt);
+      if (res && res.description) {
+        updateMassRow(index, "description", res.description);
+      }
+    } catch (err) {
+      console.error("Mass AI Generator Error:", err);
+    } finally {
+      setMassAddLoadingIndex(null);
+    }
+  };
+
   // Format currency helper
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat("en-US", {
@@ -86,23 +127,27 @@ export default function DashboardClient({ initialEntries }: DashboardClientProps
         setFormError(res.error);
         setIsAdding(false);
       } else {
-        // Refresh local UI state
-        const newEntry: WorkEntry = {
-          id: Math.random().toString(), // Temporary ID until page reload fetches Turso UUID
-          user_id: "default-user",
-          work_date: formData.get("work_date") as string,
-          hours: parseFloat(formData.get("hours") as string),
-          hourly_rate: parseFloat(formData.get("hourly_rate") as string),
-          description: formData.get("description") as string,
-          created_at: new Date().toISOString(),
-        };
-
-        setEntries([newEntry, ...entries]);
+        if (res && res.entry) {
+          setEntries((prev) => [res.entry, ...prev]);
+        } else {
+          // Fallback UI update
+          const newEntry: WorkEntry = {
+            id: Math.random().toString(),
+            user_id: "default-user",
+            work_date: formData.get("work_date") as string,
+            hours: parseFloat(formData.get("hours") as string),
+            hourly_rate: parseFloat(formData.get("hourly_rate") as string),
+            description: formData.get("description") as string,
+            created_at: new Date().toISOString(),
+          };
+          setEntries((prev) => [newEntry, ...prev]);
+        }
         
-        // Reset dynamic inputs
+        // Reset dynamic inputs & close popup modal
         setHours("");
         setDescription("");
         setIsAdding(false);
+        setIsAddModalOpen(false);
       }
     } catch (err) {
       setFormError("Failed to add entry. Connection error.");
@@ -112,20 +157,19 @@ export default function DashboardClient({ initialEntries }: DashboardClientProps
 
   // 2. Delete Entry handler
   const handleDeleteEntry = async (id: string) => {
-    if (!confirm("Are you sure you want to delete this work entry?")) return;
+    if (!id) return;
+    const targetId = String(id).trim();
 
-    const previousEntries = [...entries];
-    setEntries(entries.filter((entry) => entry.id !== id));
+    // Optimistically remove from local UI state immediately
+    setEntries((prev) => prev.filter((entry) => String(entry.id).trim() !== targetId));
 
     try {
-      const res = await deleteWorkEntryAction(id);
+      const res = await deleteWorkEntryAction(targetId);
       if (res && res.error) {
-        alert(res.error);
-        setEntries(previousEntries);
+        setFormError(res.error);
       }
     } catch (err) {
-      alert("Failed to delete entry due to a network error.");
-      setEntries(previousEntries);
+      console.error("Failed to delete entry on server:", err);
     }
   };
 
@@ -344,17 +388,21 @@ export default function DashboardClient({ initialEntries }: DashboardClientProps
         setMassAddError(res.error);
         setIsBatchSaving(false);
       } else {
-        const mappedLocal: WorkEntry[] = validEntries.map(ent => ({
-          id: Math.random().toString(),
-          user_id: "default-user",
-          work_date: ent.work_date,
-          hours: ent.hours,
-          hourly_rate: ent.hourly_rate,
-          description: ent.description,
-          created_at: new Date().toISOString()
-        }));
+        if (res && res.entries) {
+          setEntries((prev) => [...res.entries, ...prev]);
+        } else {
+          const mappedLocal: WorkEntry[] = validEntries.map(ent => ({
+            id: Math.random().toString(),
+            user_id: "default-user",
+            work_date: ent.work_date,
+            hours: ent.hours,
+            hourly_rate: ent.hourly_rate,
+            description: ent.description,
+            created_at: new Date().toISOString()
+          }));
+          setEntries((prev) => [...mappedLocal, ...prev]);
+        }
 
-        setEntries([...mappedLocal, ...entries]);
         setIsBatchSaving(false);
         setIsMassAddOpen(false);
       }
@@ -462,6 +510,10 @@ export default function DashboardClient({ initialEntries }: DashboardClientProps
           </p>
         </div>
         <div style={{ display: "flex", gap: "0.75rem" }}>
+          <button className="btn btn-primary" onClick={() => setIsAddModalOpen(true)} style={{ display: "flex", alignItems: "center", gap: "0.35rem", padding: "0.5rem 1rem", fontSize: "0.85rem" }}>
+            <Plus size={16} />
+            <span>Log New Session</span>
+          </button>
           <button className="btn" onClick={openMassAdd} style={{ display: "flex", alignItems: "center", gap: "0.35rem", padding: "0.5rem 1rem", fontSize: "0.85rem", border: "1.5px solid var(--accent)", color: "var(--accent)" }}>
             <Layers size={14} />
             <span>Mass Add</span>
@@ -503,94 +555,6 @@ export default function DashboardClient({ initialEntries }: DashboardClientProps
             <h2 style={{ fontSize: "1.75rem", fontWeight: "700", color: "var(--accent)", marginTop: "0.15rem" }}>{formatCurrency(averageHourlyRate)}<span style={{ fontSize: "0.85rem", fontWeight: "500", color: "var(--text-muted)" }}>/hr</span></h2>
           </div>
         </div>
-      </section>
-
-      {/* Input Form Panel */}
-      <section className="glass-panel animate-fade-in" style={{ padding: "2rem", marginBottom: "2rem" }}>
-        <h3 style={{ fontSize: "1.1rem", fontWeight: "700", marginBottom: "1.25rem", display: "flex", alignItems: "center", gap: "0.5rem" }}>
-          <Plus size={18} style={{ color: "var(--primary)" }} />
-          Log New Work Session
-        </h3>
-
-        {formError && (
-          <div style={{ padding: "0.75rem", background: "rgba(239, 68, 68, 0.1)", border: "1px solid rgba(239, 68, 68, 0.2)", borderRadius: "var(--border-radius-sm)", color: "#fca5a5", fontSize: "0.875rem", marginBottom: "1rem" }}>
-            {formError}
-          </div>
-        )}
-
-        {/* Horizontal Form Layout */}
-        <form onSubmit={handleAddEntry} style={{ display: "flex", flexWrap: "wrap", gap: "1.25rem", alignItems: "flex-end" }}>
-          <div className="form-group" style={{ flex: "1 1 180px" }}>
-            <label className="form-label">
-              <Calendar size={12} style={{ marginRight: "4px", display: "inline" }} />
-              Date Worked
-            </label>
-            <input
-              type="date"
-              name="work_date"
-              required
-              value={workDate}
-              onChange={(e) => setWorkDate(e.target.value)}
-              className="input-field"
-            />
-          </div>
-
-          <div className="form-group" style={{ flex: "1 1 120px" }}>
-            <label className="form-label">
-              <Clock size={12} style={{ marginRight: "4px", display: "inline" }} />
-              Hours Worked
-            </label>
-            <input
-              type="number"
-              name="hours"
-              step="0.1"
-              min="0.1"
-              required
-              placeholder="e.g. 8"
-              value={hours}
-              onChange={(e) => setHours(e.target.value)}
-              className="input-field"
-            />
-          </div>
-
-          <div className="form-group" style={{ flex: "1 1 120px" }}>
-            <label className="form-label">
-              <DollarSign size={12} style={{ marginRight: "2px", display: "inline" }} />
-              Hourly Rate ($)
-            </label>
-            <input
-              type="number"
-              name="hourly_rate"
-              step="0.01"
-              min="0"
-              required
-              placeholder="e.g. 50"
-              value={hourlyRate}
-              onChange={(e) => setHourlyRate(e.target.value)}
-              className="input-field"
-            />
-          </div>
-
-          <div className="form-group" style={{ flex: "2 1 250px" }}>
-            <label className="form-label">
-              <Briefcase size={12} style={{ marginRight: "4px", display: "inline" }} />
-              What I Did (Description)
-            </label>
-            <input
-              type="text"
-              name="description"
-              required
-              placeholder="e.g. Developed dashboard views and API integrations"
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              className="input-field"
-            />
-          </div>
-
-          <button type="submit" className="btn btn-primary" disabled={isAdding} style={{ flex: "0 0 auto", height: "39px", padding: "0 1.5rem" }}>
-            {isAdding ? "Saving..." : "Add Entry"}
-          </button>
-        </form>
       </section>
 
       {/* History Log Section */}
@@ -813,12 +777,17 @@ export default function DashboardClient({ initialEntries }: DashboardClientProps
                               <Edit2 size={14} style={{ color: "var(--primary)" }} />
                             </button>
                             <button
-                              onClick={() => handleDeleteEntry(entry.id)}
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                e.preventDefault();
+                                handleDeleteEntry(entry.id);
+                              }}
                               className="btn btn-danger btn-icon-only"
                               title="Delete log"
-                              style={{ padding: "6px" }}
+                              style={{ padding: "6px", cursor: "pointer" }}
                             >
-                              <Trash2 size={14} />
+                              <Trash2 size={14} style={{ pointerEvents: "none" }} />
                             </button>
                           </div>
                         </td>
@@ -831,6 +800,218 @@ export default function DashboardClient({ initialEntries }: DashboardClientProps
           </div>
         )}
       </section>
+
+      {/* Single Add Work Session Modal Layer */}
+      {isAddModalOpen && (
+        <div className="modal-overlay">
+          <div className="modal-content glass-panel" style={{ maxWidth: "680px" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1.5rem", borderBottom: "1px solid var(--border)", paddingBottom: "1rem" }}>
+              <h3 style={{ fontSize: "1.25rem", fontWeight: "700", display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                <Plus size={20} style={{ color: "var(--primary)" }} />
+                Log New Work Session
+              </h3>
+              <button onClick={() => setIsAddModalOpen(false)} className="btn btn-icon-only" style={{ border: "none" }}>
+                <X size={18} />
+              </button>
+            </div>
+
+            {formError && (
+              <div style={{ padding: "0.75rem", background: "var(--danger-bg)", border: "1px solid rgba(239, 68, 68, 0.2)", borderRadius: "var(--border-radius-sm)", color: "#f87171", fontSize: "0.875rem", marginBottom: "1rem" }}>
+                {formError}
+              </div>
+            )}
+
+            <form onSubmit={handleAddEntry} style={{ display: "flex", flexDirection: "column", gap: "1.25rem" }}>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))", gap: "1rem" }}>
+                <div className="form-group">
+                  <label className="form-label">
+                    <Calendar size={12} style={{ marginRight: "4px", display: "inline" }} />
+                    Date Worked
+                  </label>
+                  <input
+                    type="date"
+                    name="work_date"
+                    required
+                    value={workDate}
+                    onChange={(e) => setWorkDate(e.target.value)}
+                    className="input-field"
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label">
+                    <Clock size={12} style={{ marginRight: "4px", display: "inline" }} />
+                    Hours Worked
+                  </label>
+                  <input
+                    type="number"
+                    name="hours"
+                    step="0.1"
+                    min="0.1"
+                    required
+                    placeholder="e.g. 8"
+                    value={hours}
+                    onChange={(e) => setHours(e.target.value)}
+                    className="input-field"
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label">
+                    <DollarSign size={12} style={{ marginRight: "2px", display: "inline" }} />
+                    Hourly Rate ($)
+                  </label>
+                  <input
+                    type="number"
+                    name="hourly_rate"
+                    step="0.01"
+                    min="0"
+                    required
+                    placeholder="e.g. 50"
+                    value={hourlyRate}
+                    onChange={(e) => setHourlyRate(e.target.value)}
+                    className="input-field"
+                  />
+                </div>
+              </div>
+
+              <div className="form-group">
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.2rem" }}>
+                  <label className="form-label" style={{ marginBottom: 0 }}>
+                    <Briefcase size={12} style={{ marginRight: "4px", display: "inline" }} />
+                    What I Did (Description)
+                  </label>
+                  <div style={{ display: "flex", gap: "0.4rem", alignItems: "center" }}>
+                    <button
+                      type="button"
+                      onClick={() => setShowPromptInput(!showPromptInput)}
+                      className="btn"
+                      style={{
+                        padding: "0.18rem 0.5rem",
+                        fontSize: "0.7rem",
+                        borderRadius: "6px",
+                        height: "22px",
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: "0.2rem",
+                        borderColor: showPromptInput ? "var(--primary)" : "rgba(255,255,255,0.15)",
+                        color: showPromptInput ? "var(--primary)" : "var(--text-muted)"
+                      }}
+                      title="Configure custom AI prompt and QA categories"
+                    >
+                      <Sliders size={10} />
+                      <span>{showPromptInput ? "Hide Prompt Options" : "Custom Prompt"}</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleGenerateAIDescription}
+                      disabled={isGeneratingAI}
+                      className="btn btn-accent"
+                      style={{
+                        padding: "0.18rem 0.55rem",
+                        fontSize: "0.72rem",
+                        borderRadius: "6px",
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: "0.25rem",
+                        height: "22px"
+                      }}
+                      title="Generate smart AI description based on QA prompts & past entries"
+                    >
+                      <Sparkles size={11} className={isGeneratingAI ? "animate-spin" : ""} />
+                      <span>{isGeneratingAI ? "AI Generating..." : "AI Suggest"}</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Custom AI Prompt Options Drawer */}
+                {showPromptInput && (
+                  <div className="animate-fade-in" style={{ marginBottom: "0.5rem", padding: "0.6rem 0.75rem", background: "rgba(10, 15, 26, 0.8)", borderRadius: "8px", border: "1px solid var(--border)" }}>
+                    <div style={{ fontSize: "0.7rem", fontWeight: "700", color: "var(--primary)", marginBottom: "0.35rem", display: "flex", alignItems: "center", gap: "0.3rem" }}>
+                      <Sparkles size={10} />
+                      <span>CUSTOM AI PROMPT INSTRUCTIONS & QA FOCUS</span>
+                    </div>
+                    <input
+                      type="text"
+                      placeholder="e.g. Focus on mobile touch controls, or type custom instructions..."
+                      value={customAIPrompt}
+                      onChange={(e) => setCustomAIPrompt(e.target.value)}
+                      className="input-field"
+                      style={{ padding: "0.35rem 0.6rem", fontSize: "0.8rem", marginBottom: "0.4rem" }}
+                    />
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: "0.3rem", alignItems: "center" }}>
+                      <span style={{ fontSize: "0.65rem", color: "var(--text-muted)", fontWeight: "600" }}>QA Presets:</span>
+                      <button
+                        type="button"
+                        onClick={() => setCustomAIPrompt("Functionality testing: navigation links, forms, user workflows")}
+                        style={{ fontSize: "0.65rem", padding: "2px 6px", borderRadius: "4px", background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)", color: "var(--text-main)", cursor: "pointer" }}
+                      >
+                        1. Functionality
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setCustomAIPrompt("Browser and device testing: cross-browser, responsive layout, touchscreens")}
+                        style={{ fontSize: "0.65rem", padding: "2px 6px", borderRadius: "4px", background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)", color: "var(--text-main)", cursor: "pointer" }}
+                      >
+                        2. Browser & Device
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setCustomAIPrompt("Visual and content review: image quality, alignment, typography")}
+                        style={{ fontSize: "0.65rem", padding: "2px 6px", borderRadius: "4px", background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)", color: "var(--text-main)", cursor: "pointer" }}
+                      >
+                        3. Visual & Content
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setCustomAIPrompt("Usability and accessibility: keyboard navigation, zoom scaling")}
+                        style={{ fontSize: "0.65rem", padding: "2px 6px", borderRadius: "4px", background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)", color: "var(--text-main)", cursor: "pointer" }}
+                      >
+                        4. Usability & Accessibility
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setCustomAIPrompt("Bug reporting and project support: issue reproduction and dev fixes")}
+                        style={{ fontSize: "0.65rem", padding: "2px 6px", borderRadius: "4px", background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)", color: "var(--text-main)", cursor: "pointer" }}
+                      >
+                        5. Bug Reporting
+                      </button>
+                      {customAIPrompt && (
+                        <button
+                          type="button"
+                          onClick={() => setCustomAIPrompt("")}
+                          style={{ fontSize: "0.65rem", padding: "2px 6px", borderRadius: "4px", background: "rgba(239,68,68,0.15)", border: "1px solid rgba(239,68,68,0.3)", color: "#f87171", cursor: "pointer" }}
+                        >
+                          Clear Prompt
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                <input
+                  type="text"
+                  name="description"
+                  required
+                  placeholder="e.g. Developed dashboard views and API integrations"
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  className="input-field"
+                />
+              </div>
+
+              <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.75rem", borderTop: "1px solid var(--border)", paddingTop: "1.25rem", marginTop: "0.5rem" }}>
+                <button type="button" onClick={() => setIsAddModalOpen(false)} className="btn">
+                  Cancel
+                </button>
+                <button type="submit" className="btn btn-primary" disabled={isAdding}>
+                  {isAdding ? "Saving..." : "Save Work Session"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* Mass Addition Modal Layer */}
       {isMassAddOpen && (
@@ -908,15 +1089,27 @@ export default function DashboardClient({ initialEntries }: DashboardClientProps
                           />
                         </td>
                         <td>
-                          <input
-                            type="text"
-                            placeholder="e.g. Added dynamic search features"
-                            required
-                            value={row.description}
-                            onChange={(e) => updateMassRow(idx, "description", e.target.value)}
-                            className="input-field"
-                            style={{ padding: "0.4rem 0.6rem", fontSize: "0.85rem" }}
-                          />
+                          <div style={{ display: "flex", gap: "0.35rem", alignItems: "center" }}>
+                            <input
+                              type="text"
+                              placeholder="e.g. Added dynamic search features"
+                              required
+                              value={row.description}
+                              onChange={(e) => updateMassRow(idx, "description", e.target.value)}
+                              className="input-field"
+                              style={{ padding: "0.4rem 0.6rem", fontSize: "0.85rem", flex: 1 }}
+                            />
+                            <button
+                              type="button"
+                              onClick={() => handleMassGenerateAI(idx)}
+                              disabled={massAddLoadingIndex === idx}
+                              className="btn btn-accent btn-icon-only"
+                              style={{ padding: "4px 7px" }}
+                              title="Generate AI description based on past work logs"
+                            >
+                              <Sparkles size={12} className={massAddLoadingIndex === idx ? "animate-spin" : ""} style={{ pointerEvents: "none" }} />
+                            </button>
+                          </div>
                         </td>
                         <td style={{ textAlign: "center" }}>
                           <button
