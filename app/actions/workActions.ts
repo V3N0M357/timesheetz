@@ -213,22 +213,71 @@ export async function addMultipleWorkEntriesAction(entries: { work_date: string;
   }
 }
 
-export async function generateAIDescriptionAction(pastDescriptions: string[] = [], customPrompt: string = "") {
+const SHORT_QA_PROMPTS = [
+  "Tested navigation links, dropdown menus, and button click handlers",
+  "Checked error toast messages and inline form validation feedback",
+  "Verified placeholder text, icon alignment, and visual styling",
+  "Retested single resolved UI ticket across Chrome viewport"
+];
+
+const MEDIUM_QA_PROMPTS = [
+  "Executed cross-browser testing across desktop and tablet viewports",
+  "Tested search bar queries, filter drop-downs, and table sorting behavior",
+  "Validated authentication, session cookies, and login/logout flows",
+  "Checked responsive layouts and container wrapping under window resizing"
+];
+
+const HEAVY_QA_PROMPTS = [
+  "Conducted extensive end-to-end user journey testing across authentication, search, and checkout modules",
+  "Executed comprehensive regression suite following major code refactor and verified all open engineering fixes",
+  "Audited system for broken assets, multi-device layout bugs, and edge-case form submission errors",
+  "Performed deep integration testing across user roles, data persistence, and API responses"
+];
+
+const FULL_DAY_QA_PROMPTS = [
+  "Executed full production release candidate regression suite across 5 browser environments, validating performance and data integrity under high load",
+  "Completed exhaustive system-wide QA session covering all primary user workflows, accessibility standards, and offline network fallback behavior",
+  "Systematically audited entire platform architecture, documented reproduction steps for edge-case defects, and verified dev team fixes"
+];
+
+export async function generateAIDescriptionAction(
+  pastDescriptions: string[] = [],
+  customPrompt: string = "",
+  hoursValInput?: number | string
+) {
   try {
+    const hoursNum = typeof hoursValInput === "number" ? hoursValInput : parseFloat(hoursValInput || "0");
+    const hoursStr = !isNaN(hoursNum) && hoursNum > 0 ? `${hoursNum} hours` : "unspecified duration";
+
     const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
     if (apiKey) {
       const sampleDescriptions = pastDescriptions.filter(Boolean).slice(0, 10).join("\n- ");
-      const promptText = `You are an AI assistant generating QA timesheet descriptions.
-User's Custom AI Prompt/Focus: ${customPrompt ? customPrompt : "Generate QA testing tasks matching user's work"}
+      
+      let durationGuidance = "";
+      if (hoursNum > 0) {
+        if (hoursNum < 1.5) {
+          durationGuidance = `Target session duration is SHORT (${hoursNum} hrs). Generate a targeted micro task (e.g. quick button check, single form field fix, menu link validation, or minor UI patch). Do NOT make it sound like an all-day massive audit.`;
+        } else if (hoursNum <= 3.5) {
+          durationGuidance = `Target session duration is MEDIUM (${hoursNum} hrs). Generate a moderate module check or suite run (e.g. testing cross-browser layout, validating search/filter functionality, or checking form suite validation).`;
+        } else if (hoursNum <= 6.5) {
+          durationGuidance = `Target session duration is MAJOR (${hoursNum} hrs). Generate a substantial, comprehensive work activity (e.g. full end-to-end user journey audits, multi-device regression passes, or complete issue reproduction and retesting across key components). NEVER suggest a trivial 10-minute task like "tested a menu".`;
+        } else {
+          durationGuidance = `Target session duration is FULL DAY / HEAVY (${hoursNum} hrs). Generate an exhaustive system-wide activity (e.g. full release candidate regression suite across 5+ browsers, complex performance & data integrity audit, or end-to-end integration testing across all primary user workflows). NEVER suggest a quick minor fix.`;
+        }
+      }
+
+      const promptText = `You are an intelligent QA timesheet assistant.
+Session Duration: ${hoursStr}.
+${durationGuidance}
+
+User's Custom AI Focus: ${customPrompt ? customPrompt : "Generate QA work activities appropriate for the session length."}
+
 Past User Work Logs:
 ${sampleDescriptions ? `- ${sampleDescriptions}` : "- Tested user interface and API workflows"}
 
-Base QA Tasks Pool:
-${QA_PROMPT_BANK.slice(0, 10).map(t => `- ${t}`).join("\n")}
-
-Generate ONE unique, professional 1-sentence work entry description.
-Each time you generate, slightly alter the wording, focus, or phrasing so no two outputs are identical.
-Do NOT include quotes, bullet points, or extra formatting. Return ONLY the description text.`;
+Generate ONE realistic, professional 1-sentence work entry description that matches the ${hoursStr} duration complexity.
+Slightly alter wording each time so outputs are unique.
+Do NOT include quotes, bullet points, or markdown. Return ONLY the description text.`;
 
       const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`, {
         method: "POST",
@@ -247,13 +296,17 @@ Do NOT include quotes, bullet points, or extra formatting. Return ONLY the descr
       }
     }
 
-    let basePrompt = "";
-    if (customPrompt.trim()) {
-      basePrompt = customPrompt.trim();
-    } else {
-      const randomIndex = Math.floor(Math.random() * QA_PROMPT_BANK.length);
-      basePrompt = QA_PROMPT_BANK[randomIndex];
+    // Fallback logic when Gemini API key is offline/missing
+    let pool = SHORT_QA_PROMPTS;
+    if (hoursNum >= 6.5) {
+      pool = FULL_DAY_QA_PROMPTS;
+    } else if (hoursNum >= 4.0) {
+      pool = HEAVY_QA_PROMPTS;
+    } else if (hoursNum >= 1.5) {
+      pool = MEDIUM_QA_PROMPTS;
     }
+
+    let basePrompt = customPrompt.trim() || pool[Math.floor(Math.random() * pool.length)];
 
     const prefix = VARIATION_PREFIXES[Math.floor(Math.random() * VARIATION_PREFIXES.length)];
     const suffix = VARIATION_SUFFIXES[Math.floor(Math.random() * VARIATION_SUFFIXES.length)];
@@ -270,7 +323,7 @@ Do NOT include quotes, bullet points, or extra formatting. Return ONLY the descr
 
   } catch (err) {
     console.error("AI Description error:", err);
-    return { description: "Thoroughly tested navigation links and buttons across desktop and mobile viewports." };
+    return { description: "Executed end-to-end regression testing across core user workflows and verified system stability." };
   }
 }
 

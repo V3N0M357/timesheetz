@@ -79,7 +79,7 @@ export default function DashboardClient({ initialEntries }: DashboardClientProps
     setIsGeneratingAI(true);
     const pastDescs = entries.map((e) => e.description);
     try {
-      const res = await generateAIDescriptionAction(pastDescs, customAIPrompt);
+      const res = await generateAIDescriptionAction(pastDescs, customAIPrompt, hours);
       if (res && res.description) {
         setDescription(res.description);
       }
@@ -94,8 +94,9 @@ export default function DashboardClient({ initialEntries }: DashboardClientProps
   const handleMassGenerateAI = async (index: number) => {
     setMassAddLoadingIndex(index);
     const pastDescs = entries.map((e) => e.description);
+    const targetHours = massAddRows[index]?.hours || "";
     try {
-      const res = await generateAIDescriptionAction(pastDescs, customAIPrompt);
+      const res = await generateAIDescriptionAction(pastDescs, customAIPrompt, targetHours);
       if (res && res.description) {
         updateMassRow(index, "description", res.description);
       }
