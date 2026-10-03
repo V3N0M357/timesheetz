@@ -1,8 +1,8 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { addWorkEntryAction, deleteWorkEntryAction, updateWorkEntryAction, addMultipleWorkEntriesAction, generateAIDescriptionAction, refineAllDescriptionsAction } from "./actions/workActions";
-import { Clock, DollarSign, Search, Trash2, Plus, Calendar, Briefcase, TrendingUp, Download, Mail, Edit2, Check, X, Layers, Filter, FileText, Sparkles, Sliders } from "lucide-react";
+import { addWorkEntryAction, deleteWorkEntryAction, updateWorkEntryAction, addMultipleWorkEntriesAction, generateAIDescriptionAction, refineAllDescriptionsAction, autoFillMonthAction } from "./actions/workActions";
+import { Clock, DollarSign, Search, Trash2, Plus, Calendar, Briefcase, TrendingUp, Download, Mail, Edit2, Check, X, Layers, Filter, FileText, Sparkles, Sliders, Wand, Printer } from "lucide-react";
 
 interface WorkEntry {
   id: string;
@@ -47,6 +47,21 @@ export default function DashboardClient({ initialEntries }: DashboardClientProps
   }>>([]);
   const [massAddError, setMassAddError] = useState<string | null>(null);
   const [isBatchSaving, setIsBatchSaving] = useState(false);
+
+  // Auto-Fill Month Modal State
+  const [isAutoFillOpen, setIsAutoFillOpen] = useState(false);
+  const [autoFillMonth, setAutoFillMonth] = useState("2026-09");
+  const [autoFillTarget, setAutoFillTarget] = useState("1500");
+  const [autoFillRate, setAutoFillRate] = useState("30");
+  const [autoFillPrompt, setAutoFillPrompt] = useState("");
+  const [isAutoFilling, setIsAutoFilling] = useState(false);
+  const [autoFillError, setAutoFillError] = useState<string | null>(null);
+
+  // Specific PDF Modal State
+  const [isPDFModalOpen, setIsPDFModalOpen] = useState(false);
+  const [pdfPeriodOption, setPdfPeriodOption] = useState("all");
+  const [pdfFromDate, setPdfFromDate] = useState("");
+  const [pdfToDate, setPdfToDate] = useState("");
 
   // Filter States
   const [timePeriod, setTimePeriod] = useState("all"); // all, this-month, last-month, this-year, last-year
@@ -140,6 +155,69 @@ export default function DashboardClient({ initialEntries }: DashboardClientProps
     } finally {
       setIsRefiningAll(false);
     }
+  };
+
+  // Handler for Auto-Fill Month submission
+  const handleAutoFillSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setAutoFillError(null);
+
+    const targetVal = parseFloat(autoFillTarget);
+    const rateVal = parseFloat(autoFillRate) || 30;
+
+    if (!autoFillMonth) {
+      setAutoFillError("Please select a target month");
+      return;
+    }
+
+    if (isNaN(targetVal) || targetVal <= 0) {
+      setAutoFillError("Target earnings must be a positive dollar amount");
+      return;
+    }
+
+    setIsAutoFilling(true);
+
+    try {
+      const res = await autoFillMonthAction(autoFillMonth, targetVal, rateVal, autoFillPrompt);
+      if (res && res.error) {
+        setAutoFillError(res.error);
+        setIsAutoFilling(false);
+      } else if (res && res.entries) {
+        setEntries((prev) => [
+          ...res.entries,
+          ...prev.filter((e) => !e.work_date.startsWith(autoFillMonth))
+        ]);
+
+        setIsAutoFilling(false);
+        setIsAutoFillOpen(false);
+        setTimePeriod(autoFillMonth);
+        setFromDate("");
+        setToDate("");
+      }
+    } catch (err) {
+      setAutoFillError("Failed to auto-fill month due to connection error.");
+      setIsAutoFilling(false);
+    }
+  };
+
+  // Handler for Generating Specific PDF Statement
+  const handleGeneratePDFForPeriod = (periodVal: string, fromVal: string, toVal: string) => {
+    setTimePeriod(periodVal);
+    setFromDate(fromVal);
+    setToDate(toVal);
+    setIsPDFModalOpen(false);
+
+    const originalTitle = document.title;
+    let labelDesc = periodVal;
+    if (fromVal || toVal) {
+      labelDesc = `range_${fromVal || "start"}_to_${toVal || "end"}`;
+    }
+    document.title = `Timesheet_Statement_${labelDesc}_${new Date().toISOString().split("T")[0]}`;
+
+    setTimeout(() => {
+      window.print();
+      document.title = originalTitle;
+    }, 150);
   };
 
   // 1. Single Add Entry handler
@@ -701,6 +779,10 @@ export default function DashboardClient({ initialEntries }: DashboardClientProps
             <Sparkles size={14} className={isRefiningAll ? "animate-spin" : ""} />
             <span>{isRefiningAll ? "Refining Logs..." : "Refine All Logs"}</span>
           </button>
+          <button className="btn" onClick={() => setIsAutoFillOpen(true)} style={{ display: "flex", alignItems: "center", gap: "0.35rem", padding: "0.5rem 1rem", fontSize: "0.85rem", border: "1.5px solid var(--primary)", color: "var(--primary)" }} title="Completely fill up a month to a target earnings price using sessions from 0.5h to 6h with AI descriptions">
+            <Wand size={14} />
+            <span>Auto-Fill Month</span>
+          </button>
           <button className="btn btn-primary" onClick={() => setIsAddModalOpen(true)} style={{ display: "flex", alignItems: "center", gap: "0.35rem", padding: "0.5rem 1rem", fontSize: "0.85rem" }}>
             <Plus size={16} />
             <span>Log New Session</span>
@@ -753,12 +835,16 @@ export default function DashboardClient({ initialEntries }: DashboardClientProps
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "1rem", marginBottom: "1rem" }}>
           <h3 style={{ fontSize: "1.1rem", fontWeight: "700" }}>Work History Log</h3>
           
-          <div style={{ display: "flex", gap: "0.75rem" }}>
+          <div style={{ display: "flex", gap: "0.75rem", flexWrap: "wrap" }}>
+            <button className="btn" onClick={() => setIsPDFModalOpen(true)} title="Generate PDF for specific month, year, or custom date range" style={{ display: "flex", alignItems: "center", gap: "0.35rem", padding: "0.45rem 0.85rem", fontSize: "0.8rem", border: "1px solid var(--primary)", color: "var(--primary)" }}>
+              <Printer size={14} />
+              <span>PDF for Month / Year</span>
+            </button>
             <button className="btn" onClick={downloadCSV} title="Export spreadsheet data" style={{ display: "flex", alignItems: "center", gap: "0.35rem", padding: "0.45rem 0.85rem", fontSize: "0.8rem" }}>
               <Download size={14} />
               <span>{getDownloadButtonLabel()}</span>
             </button>
-            <button className="btn" onClick={downloadPDF} title="Download printable PDF report" style={{ display: "flex", alignItems: "center", gap: "0.35rem", padding: "0.45rem 0.85rem", fontSize: "0.8rem" }}>
+            <button className="btn" onClick={downloadPDF} title="Download printable PDF report for current view" style={{ display: "flex", alignItems: "center", gap: "0.35rem", padding: "0.45rem 0.85rem", fontSize: "0.8rem" }}>
               <FileText size={14} />
               <span>Download PDF</span>
             </button>
@@ -1390,6 +1476,208 @@ export default function DashboardClient({ initialEntries }: DashboardClientProps
                 </div>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Auto-Fill Month Modal */}
+      {isAutoFillOpen && (
+        <div className="modal-backdrop animate-fade-in" style={{ zIndex: 1050 }}>
+          <div className="glass-panel modal-content animate-scale-up" style={{ maxWidth: "520px", width: "92%", padding: "2rem" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1.25rem", borderBottom: "1px solid var(--border)", paddingBottom: "0.75rem" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                <Wand size={20} style={{ color: "var(--primary)" }} />
+                <h3 style={{ fontSize: "1.25rem", fontWeight: "700" }}>Auto-Fill Month Earnings</h3>
+              </div>
+              <button
+                className="btn btn-icon-only"
+                onClick={() => setIsAutoFillOpen(false)}
+                style={{ border: "none", background: "transparent" }}
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {autoFillError && (
+              <div style={{ padding: "0.75rem 1rem", borderRadius: "8px", background: "var(--danger-bg)", color: "var(--danger)", fontSize: "0.85rem", marginBottom: "1.25rem" }}>
+                {autoFillError}
+              </div>
+            )}
+
+            <form onSubmit={handleAutoFillSubmit} style={{ display: "flex", flexDirection: "column", gap: "1.1rem" }}>
+              <div className="form-group">
+                <label className="form-label">Select Month to Fill</label>
+                <select
+                  value={autoFillMonth}
+                  onChange={(e) => setAutoFillMonth(e.target.value)}
+                  className="input-field"
+                  style={{ padding: "0.65rem" }}
+                >
+                  <option value="2026-10">October 2026 (Current Month)</option>
+                  <option value="2026-09">September 2026</option>
+                  <option value="2026-08">August 2026</option>
+                  <option value="2026-07">July 2026</option>
+                  <option value="2026-06">June 2026</option>
+                  <option value="2026-05">May 2026</option>
+                  <option value="2026-04">April 2026</option>
+                </select>
+              </div>
+
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem" }}>
+                <div className="form-group">
+                  <label className="form-label">Target Earnings ($)</label>
+                  <div style={{ position: "relative" }}>
+                    <DollarSign size={14} style={{ position: "absolute", left: "0.75rem", top: "50%", transform: "translateY(-50%)", color: "var(--text-muted)" }} />
+                    <input
+                      type="number"
+                      step="0.01"
+                      placeholder="e.g. 1565"
+                      value={autoFillTarget}
+                      onChange={(e) => setAutoFillTarget(e.target.value)}
+                      className="input-field"
+                      style={{ paddingLeft: "2rem" }}
+                      required
+                    />
+                  </div>
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label">Hourly Rate ($/hr)</label>
+                  <div style={{ position: "relative" }}>
+                    <DollarSign size={14} style={{ position: "absolute", left: "0.75rem", top: "50%", transform: "translateY(-50%)", color: "var(--text-muted)" }} />
+                    <input
+                      type="number"
+                      step="0.01"
+                      placeholder="30"
+                      value={autoFillRate}
+                      onChange={(e) => setAutoFillRate(e.target.value)}
+                      className="input-field"
+                      style={{ paddingLeft: "2rem" }}
+                      required
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="form-group">
+                <label className="form-label">AI Work Focus / Domain (Optional)</label>
+                <input
+                  type="text"
+                  placeholder="e.g. Navigation & cross-browser QA testing"
+                  value={autoFillPrompt}
+                  onChange={(e) => setAutoFillPrompt(e.target.value)}
+                  className="input-field"
+                />
+              </div>
+
+              <div style={{ padding: "0.85rem 1rem", borderRadius: "10px", background: "rgba(163, 230, 53, 0.08)", border: "1px solid rgba(163, 230, 53, 0.2)", fontSize: "0.8rem", color: "var(--text-muted)" }}>
+                💡 <strong>Smart Constraints</strong>: Sessions are automatically distributed across weekdays (Mon-Fri) with lengths strictly between <strong>0.5 hrs and 6.0 hrs</strong>. Each session gets an AI-generated description matched to its exact duration.
+              </div>
+
+              <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.75rem", marginTop: "0.5rem" }}>
+                <button
+                  type="button"
+                  className="btn"
+                  onClick={() => setIsAutoFillOpen(false)}
+                  disabled={isAutoFilling}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="btn btn-primary"
+                  disabled={isAutoFilling}
+                  style={{ display: "flex", alignItems: "center", gap: "0.35rem" }}
+                >
+                  <Wand size={16} className={isAutoFilling ? "animate-spin" : ""} />
+                  <span>{isAutoFilling ? "Auto-Filling Month..." : "Fill Month Now"}</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Specific PDF Statement Modal */}
+      {isPDFModalOpen && (
+        <div className="modal-backdrop animate-fade-in" style={{ zIndex: 1050 }}>
+          <div className="glass-panel modal-content animate-scale-up" style={{ maxWidth: "480px", width: "92%", padding: "2rem" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1.25rem", borderBottom: "1px solid var(--border)", paddingBottom: "0.75rem" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                <Printer size={20} style={{ color: "var(--primary)" }} />
+                <h3 style={{ fontSize: "1.25rem", fontWeight: "700" }}>Download Specific PDF Statement</h3>
+              </div>
+              <button
+                className="btn btn-icon-only"
+                onClick={() => setIsPDFModalOpen(false)}
+                style={{ border: "none", background: "transparent" }}
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div style={{ display: "flex", flexDirection: "column", gap: "1.1rem" }}>
+              <div className="form-group">
+                <label className="form-label">Select Month or Time Period</label>
+                <select
+                  value={pdfPeriodOption}
+                  onChange={(e) => setPdfPeriodOption(e.target.value)}
+                  className="input-field"
+                  style={{ padding: "0.65rem" }}
+                >
+                  <option value="all">All Logged History</option>
+                  <option value="this-month">{getRelativeMonthLabel(0)}</option>
+                  <option value="last-month">{getRelativeMonthLabel(1)}</option>
+                  <option value="2-months-ago">{getRelativeMonthLabel(2)}</option>
+                  <option value="3-months-ago">{getRelativeMonthLabel(3)}</option>
+                  <option value="4-months-ago">{getRelativeMonthLabel(4)}</option>
+                  <option value="this-year">This Year ({new Date().getFullYear()})</option>
+                  <option value="last-year">Last Year ({new Date().getFullYear() - 1})</option>
+                </select>
+              </div>
+
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem" }}>
+                <div className="form-group">
+                  <label className="form-label">From Date (Optional)</label>
+                  <input
+                    type="date"
+                    value={pdfFromDate}
+                    onChange={(e) => setPdfFromDate(e.target.value)}
+                    className="input-field"
+                    style={{ padding: "0.5rem 0.65rem" }}
+                  />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">To Date (Optional)</label>
+                  <input
+                    type="date"
+                    value={pdfToDate}
+                    onChange={(e) => setPdfToDate(e.target.value)}
+                    className="input-field"
+                    style={{ padding: "0.5rem 0.65rem" }}
+                  />
+                </div>
+              </div>
+
+              <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.75rem", marginTop: "0.5rem" }}>
+                <button
+                  type="button"
+                  className="btn"
+                  onClick={() => setIsPDFModalOpen(false)}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  onClick={() => handleGeneratePDFForPeriod(pdfPeriodOption, pdfFromDate, pdfToDate)}
+                  style={{ display: "flex", alignItems: "center", gap: "0.35rem" }}
+                >
+                  <Printer size={16} />
+                  <span>Generate & Print PDF</span>
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}

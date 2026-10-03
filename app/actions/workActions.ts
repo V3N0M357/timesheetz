@@ -435,3 +435,119 @@ ${itemsText}`;
     return { error: "Failed to refine descriptions. " + (err?.message || "") };
   }
 }
+
+export async function autoFillMonthAction(
+  monthStr: string,
+  targetEarnings: number,
+  hourlyRateInput: number = 30,
+  customPrompt: string = ""
+) {
+  const userId = "default-user";
+  if (!monthStr || !monthStr.includes("-")) {
+    return { error: "Please select a valid month" };
+  }
+  if (isNaN(targetEarnings) || targetEarnings <= 0) {
+    return { error: "Target earnings must be a positive dollar amount" };
+  }
+  const hourlyRate = isNaN(hourlyRateInput) || hourlyRateInput <= 0 ? 30 : hourlyRateInput;
+
+  const [yearStr, monthNumStr] = monthStr.split("-");
+  const year = parseInt(yearStr, 10);
+  const month = parseInt(monthNumStr, 10);
+
+  try {
+    // 1. Clear existing entries for that month
+    await db.execute({
+      sql: `DELETE FROM work_entries WHERE work_date LIKE ?`,
+      args: [`${monthStr}%`]
+    });
+
+    // 2. Find weekdays in the month
+    const daysInMonth = new Date(year, month, 0).getDate();
+    const weekdays: string[] = [];
+    for (let d = 1; d <= daysInMonth; d++) {
+      const dateObj = new Date(year, month - 1, d);
+      const dayOfWeek = dateObj.getDay();
+      if (dayOfWeek >= 1 && dayOfWeek <= 5) {
+        const yyyy = dateObj.getFullYear();
+        const mm = String(dateObj.getMonth() + 1).padStart(2, "0");
+        const dd = String(dateObj.getDate()).padStart(2, "0");
+        weekdays.push(`${yyyy}-${mm}-${dd}`);
+      }
+    }
+
+    if (weekdays.length === 0) {
+      return { error: "No valid weekdays found in selected month" };
+    }
+
+    // 3. Generate session hours strictly between 0.5 and 6.0 hrs
+    let remainingMoney = targetEarnings;
+    const sessions: { date: string; hours: number; rate: number }[] = [];
+    const availableDays = [...weekdays].sort(() => Math.random() - 0.5);
+
+    let dayIdx = 0;
+    while (remainingMoney > 0.01 && dayIdx < availableDays.length) {
+      const dateStr = availableDays[dayIdx++];
+      
+      let targetHours = 0;
+      let rate = hourlyRate;
+
+      const maxMoneyFor6Hrs = 6.0 * hourlyRate;
+      if (remainingMoney <= maxMoneyFor6Hrs) {
+        targetHours = Math.round((remainingMoney / hourlyRate) * 10) / 10;
+        if (targetHours < 0.5) targetHours = 0.5;
+        if (targetHours > 6.0) targetHours = 6.0;
+        rate = Math.round((remainingMoney / targetHours) * 100) / 100;
+        remainingMoney = 0;
+      } else {
+        const possibleSteps = [1.5, 2.0, 2.5, 3.0, 3.5, 4.0, 4.5, 5.0, 5.5, 6.0];
+        targetHours = possibleSteps[Math.floor(Math.random() * possibleSteps.length)];
+        const sessionEarned = targetHours * rate;
+        remainingMoney = Math.round((remainingMoney - sessionEarned) * 100) / 100;
+      }
+
+      sessions.push({ date: dateStr, hours: targetHours, rate });
+    }
+
+    sessions.sort((a, b) => a.date.localeCompare(b.date));
+
+    // 4. Generate AI descriptions matching session hours
+    const pastDescs = sessions.map(s => `Session ${s.hours} hours`);
+    const generatedEntries = [];
+    const batchQueries = [];
+
+    for (const s of sessions) {
+      const id = crypto.randomUUID();
+      const createdAt = new Date().toISOString();
+      
+      const aiRes = await generateAIDescriptionAction(pastDescs, customPrompt, s.hours);
+      const description = aiRes?.description || `Executed ${s.hours} hours of QA testing and bug verification.`;
+
+      generatedEntries.push({
+        id,
+        user_id: userId,
+        work_date: s.date,
+        hours: s.hours,
+        hourly_rate: s.rate,
+        description,
+        created_at: createdAt
+      });
+
+      batchQueries.push({
+        sql: `INSERT INTO work_entries (id, user_id, work_date, hours, hourly_rate, description, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        args: [id, userId, s.date, s.hours, s.rate, description, createdAt]
+      });
+    }
+
+    if (batchQueries.length > 0) {
+      await db.batch(batchQueries);
+    }
+
+    revalidatePath("/");
+    return { success: true, entries: generatedEntries };
+
+  } catch (err: any) {
+    console.error("Auto-fill month error:", err);
+    return { error: "Failed to auto-fill month. " + (err?.message || "") };
+  }
+}
