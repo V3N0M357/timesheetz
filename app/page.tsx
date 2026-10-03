@@ -1,3 +1,6 @@
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 import { db } from "@/src/db/client";
 import { initDb } from "@/src/db/schema";
 import DashboardClient from "./dashboard-client";
