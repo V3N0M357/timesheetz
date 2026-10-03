@@ -764,9 +764,6 @@ export default function DashboardClient({ initialEntries }: DashboardClientProps
           <h1 style={{ fontSize: "1.25rem", fontWeight: "700", color: "var(--text-main)" }}>
             Timesheetz
           </h1>
-          <p style={{ fontSize: "0.85rem", color: "var(--text-muted)", marginTop: "0.1rem" }}>
-            Scenic Work Tracker
-          </p>
         </div>
         <div style={{ display: "flex", gap: "0.75rem", flexWrap: "wrap" }}>
           <button
@@ -1772,7 +1769,6 @@ export default function DashboardClient({ initialEntries }: DashboardClientProps
 
       <div className="print-footer">
         <span>Timesheet Statement &copy; {new Date().getFullYear()}</span>
-        <span>Page 1 of 1</span>
       </div>
     </div>
   </>

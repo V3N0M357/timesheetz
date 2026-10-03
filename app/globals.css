@@ -383,10 +383,10 @@ body::-webkit-scrollbar-thumb:hover {
   background: rgba(163, 230, 53, 0.6);
 }
 
-/* Print Specific Styles for Professional PDF Layouts */
+/* Print Specific Styles for Professional Multi-Page PDF Layouts */
 @media print {
   @page {
-    margin: 0; /* Hides browser URL header and date footer */
+    margin: 1.2cm;
     size: portrait;
   }
   
@@ -397,8 +397,9 @@ body::-webkit-scrollbar-thumb:hover {
     font-size: 10pt !important;
     margin: 0 !important;
     padding: 0 !important;
-    height: 100% !important;
-    overflow: hidden !important;
+    height: auto !important;
+    min-height: 100% !important;
+    overflow: visible !important;
   }
   
   .no-print,
@@ -411,19 +412,19 @@ body::-webkit-scrollbar-thumb:hover {
   }
   
   .print-report-container {
-    display: flex !important;
-    flex-direction: column !important;
+    display: block !important;
     background: #ffffff !important;
     font-family: 'Inter', system-ui, sans-serif !important;
     line-height: 1.4 !important;
-    padding: 1.2cm !important;
+    padding: 0 !important;
     width: 100% !important;
-    height: 100% !important;
+    height: auto !important;
+    min-height: 100% !important;
     box-sizing: border-box !important;
     position: relative !important;
-    overflow: hidden !important;
-    page-break-after: avoid !important;
-    page-break-before: avoid !important;
+    overflow: visible !important;
+    page-break-after: auto !important;
+    page-break-before: auto !important;
   }
 
   .print-header {
@@ -433,6 +434,7 @@ body::-webkit-scrollbar-thumb:hover {
     border-bottom: 2px solid #e2e8f0 !important;
     padding-bottom: 1.25rem !important;
     margin-bottom: 1.25rem !important;
+    page-break-inside: avoid !important;
   }
 
   .print-title {
@@ -508,6 +510,7 @@ body::-webkit-scrollbar-thumb:hover {
     grid-template-columns: repeat(2, 1fr) !important;
     gap: 1.5rem !important;
     margin-bottom: 1.25rem !important;
+    page-break-inside: avoid !important;
   }
 
   .print-party-box {
@@ -546,12 +549,23 @@ body::-webkit-scrollbar-thumb:hover {
     border-radius: 6px !important;
     margin-bottom: 1.25rem !important;
     color: #334155 !important;
+    page-break-inside: avoid !important;
   }
 
   .print-table {
     width: 100% !important;
     border-collapse: collapse !important;
     margin-bottom: 2rem !important;
+    page-break-inside: auto !important;
+  }
+
+  .print-table thead {
+    display: table-header-group !important;
+  }
+
+  .print-table tr {
+    page-break-inside: avoid !important;
+    page-break-after: auto !important;
   }
 
   .print-table th {
@@ -602,5 +616,8 @@ body::-webkit-scrollbar-thumb:hover {
     padding-top: 0.75rem !important;
     font-size: 0.7rem !important;
     color: #94a3b8 !important;
+    page-break-inside: avoid !important;
+    margin-top: 1.5rem !important;
   }
 }
+
