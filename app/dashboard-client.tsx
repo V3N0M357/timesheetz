@@ -462,35 +462,104 @@ export default function DashboardClient({ initialEntries }: DashboardClientProps
     }
   };
 
-  // Helper: check if a date falls in a time period
+  // Date parsing helper that converts YYYY-MM-DD, ISO timestamps, or MM/DD/YYYY to a normalized Date object at midnight local time
+  const parseEntryDateObject = (dateStr: string): Date | null => {
+    if (!dateStr) return null;
+    const isoMatch = dateStr.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})/);
+    if (isoMatch) {
+      const y = parseInt(isoMatch[1], 10);
+      const m = parseInt(isoMatch[2], 10) - 1;
+      const d = parseInt(isoMatch[3], 10);
+      return new Date(y, m, d);
+    }
+    const usMatch = dateStr.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})/);
+    if (usMatch) {
+      const m = parseInt(usMatch[1], 10) - 1;
+      const d = parseInt(usMatch[2], 10);
+      const y = parseInt(usMatch[3], 10);
+      return new Date(y, m, d);
+    }
+    const parsedDate = new Date(dateStr);
+    if (!isNaN(parsedDate.getTime())) {
+      return new Date(parsedDate.getFullYear(), parsedDate.getMonth(), parsedDate.getDate());
+    }
+    return null;
+  };
+
+  const parseEntryDate = (dateStr: string): { year: number; month: number; day: number } | null => {
+    const d = parseEntryDateObject(dateStr);
+    if (!d) return null;
+    return {
+      year: d.getFullYear(),
+      month: d.getMonth() + 1,
+      day: d.getDate(),
+    };
+  };
+
+  // Helper: check if a date falls in a selected time period
   const isInTimePeriod = (dateStr: string) => {
     if (!dateStr || timePeriod === "all") return true;
 
-    const parts = dateStr.split("-");
-    if (parts.length < 3) return true;
-    const year = parseInt(parts[0], 10);
-    const month = parseInt(parts[1], 10) - 1; // 0-indexed
+    const entryDate = parseEntryDateObject(dateStr);
+    if (!entryDate) return true;
 
-    const today = new Date();
-    const currentYear = today.getFullYear();
-    const currentMonth = today.getMonth(); // 0-indexed
+    const now = new Date();
+    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+    const currentYear = startOfToday.getFullYear();
+    const currentMonth = startOfToday.getMonth(); // 0-11
 
     if (timePeriod === "this-month") {
-      return year === currentYear && month === currentMonth;
+      return entryDate.getFullYear() === currentYear && entryDate.getMonth() === currentMonth;
     }
     if (timePeriod === "last-month") {
       const targetMonth = currentMonth === 0 ? 11 : currentMonth - 1;
       const targetYear = currentMonth === 0 ? currentYear - 1 : currentYear;
-      return year === targetYear && month === targetMonth;
+      return entryDate.getFullYear() === targetYear && entryDate.getMonth() === targetMonth;
+    }
+    if (timePeriod === "last-30-days") {
+      const diffTime = startOfToday.getTime() - entryDate.getTime();
+      const diffDays = Math.round(diffTime / (1000 * 3600 * 24));
+      return diffDays >= 0 && diffDays <= 30;
+    }
+    if (timePeriod === "last-60-days") {
+      const diffTime = startOfToday.getTime() - entryDate.getTime();
+      const diffDays = Math.round(diffTime / (1000 * 3600 * 24));
+      return diffDays >= 0 && diffDays <= 60;
+    }
+    if (timePeriod === "last-90-days") {
+      const diffTime = startOfToday.getTime() - entryDate.getTime();
+      const diffDays = Math.round(diffTime / (1000 * 3600 * 24));
+      return diffDays >= 0 && diffDays <= 90;
     }
     if (timePeriod === "this-year") {
-      return year === currentYear;
+      return entryDate.getFullYear() === currentYear;
     }
     if (timePeriod === "last-year") {
-      return year === currentYear - 1;
+      return entryDate.getFullYear() === currentYear - 1;
     }
+    // Specific month format "YYYY-MM"
+    if (timePeriod.includes("-")) {
+      const [reqYear, reqMonth] = timePeriod.split("-").map((n) => parseInt(n, 10));
+      if (reqYear && reqMonth) {
+        return entryDate.getFullYear() === reqYear && (entryDate.getMonth() + 1) === reqMonth;
+      }
+    }
+
     return true;
   };
+
+  // Dynamic calculation of unique logged months present in entries
+  const availableMonths = Array.from(
+    new Set(
+      entries
+        .map((e) => {
+          const p = parseEntryDate(e.work_date);
+          return p ? `${p.year}-${String(p.month).padStart(2, "0")}` : null;
+        })
+        .filter(Boolean) as string[]
+    )
+  ).sort((a, b) => b.localeCompare(a));
 
   // Helper: check if hours match filter criteria
   const matchesHoursFilter = (hoursVal: number) => {
@@ -502,20 +571,48 @@ export default function DashboardClient({ initialEntries }: DashboardClientProps
     return true;
   };
 
+  // Helper: check if any filters are currently active
+  const isAnyFilterActive =
+    timePeriod !== "all" ||
+    fromDate !== "" ||
+    toDate !== "" ||
+    hoursFilter !== "all" ||
+    searchQuery.trim() !== "";
+
+  const resetAllFilters = () => {
+    setTimePeriod("all");
+    setFromDate("");
+    setToDate("");
+    setHoursFilter("all");
+    setSearchQuery("");
+  };
+
   // Apply filters: Search, Period, Custom Dates, and Hours
   const filteredEntries = entries
     .filter((entry) => {
       // 1. Text Search Filter (Matches Description or Date)
       const matchesSearch =
+        searchQuery.trim() === "" ||
         entry.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
         entry.work_date.includes(searchQuery);
 
       // 2. Preset Time Period Filter
       const matchesPeriod = isInTimePeriod(entry.work_date);
 
-      // 3. Custom Date Range Filters
-      const matchesFromDate = fromDate ? entry.work_date >= fromDate : true;
-      const matchesToDate = toDate ? entry.work_date <= toDate : true;
+      // 3. Custom Date Range Filters (Robust timestamp comparison)
+      const entryDateObj = parseEntryDateObject(entry.work_date);
+      const fromDateObj = fromDate ? parseEntryDateObject(fromDate) : null;
+      const toDateObj = toDate ? parseEntryDateObject(toDate) : null;
+
+      const matchesFromDate =
+        !fromDateObj || !entryDateObj
+          ? true
+          : entryDateObj.getTime() >= fromDateObj.getTime();
+
+      const matchesToDate =
+        !toDateObj || !entryDateObj
+          ? true
+          : entryDateObj.getTime() <= toDateObj.getTime();
 
       // 4. Hours worked Filter
       const matchesHours = matchesHoursFilter(entry.hours);
@@ -528,7 +625,7 @@ export default function DashboardClient({ initialEntries }: DashboardClientProps
         return b.work_date.localeCompare(a.work_date) || b.created_at.localeCompare(a.created_at);
       }
       if (sortBy === "date-asc") {
-        return a.work_date.localeCompare(b.work_date) || a.created_at.localeCompare(b.created_at);
+        return a.work_date.localeCompare(b.work_date) || a.created_at.localeCompare(a.created_at);
       }
       if (sortBy === "earned-desc") {
         return (b.hours * b.hourly_rate) - (a.hours * a.hourly_rate);
@@ -651,14 +748,35 @@ export default function DashboardClient({ initialEntries }: DashboardClientProps
             </span>
             <select
               value={timePeriod}
-              onChange={(e) => setTimePeriod(e.target.value)}
+              onChange={(e) => {
+                setTimePeriod(e.target.value);
+                setFromDate("");
+                setToDate("");
+              }}
               className="filter-select"
             >
-              <option value="all">All Time</option>
-              <option value="this-month">This Month</option>
+              <option value="all">All Logged History</option>
+              <option value="this-month">This Month ({new Date().toLocaleString('default', { month: 'short' })})</option>
               <option value="last-month">Last Month</option>
-              <option value="this-year">This Year</option>
-              <option value="last-year">Last Year</option>
+              <option value="last-30-days">Past 30 Days</option>
+              <option value="last-60-days">Past 60 Days</option>
+              <option value="last-90-days">Past 90 Days</option>
+              <option value="this-year">This Year ({new Date().getFullYear()})</option>
+              <option value="last-year">Last Year ({new Date().getFullYear() - 1})</option>
+              {availableMonths.length > 0 && (
+                <optgroup label="Specific Logged Months">
+                  {availableMonths.map((m) => {
+                    const [y, mon] = m.split("-");
+                    const d = new Date(parseInt(y, 10), parseInt(mon, 10) - 1, 1);
+                    const label = d.toLocaleString("default", { month: "long", year: "numeric" });
+                    return (
+                      <option key={m} value={m}>
+                        {label}
+                      </option>
+                    );
+                  })}
+                </optgroup>
+              )}
             </select>
           </div>
 
@@ -667,7 +785,10 @@ export default function DashboardClient({ initialEntries }: DashboardClientProps
             <input
               type="date"
               value={fromDate}
-              onChange={(e) => setFromDate(e.target.value)}
+              onChange={(e) => {
+                setFromDate(e.target.value);
+                setTimePeriod("all");
+              }}
               className="filter-select"
               style={{ padding: "0.45rem 0.65rem" }}
             />
@@ -678,7 +799,10 @@ export default function DashboardClient({ initialEntries }: DashboardClientProps
             <input
               type="date"
               value={toDate}
-              onChange={(e) => setToDate(e.target.value)}
+              onChange={(e) => {
+                setToDate(e.target.value);
+                setTimePeriod("all");
+              }}
               className="filter-select"
               style={{ padding: "0.45rem 0.65rem" }}
             />
@@ -718,7 +842,7 @@ export default function DashboardClient({ initialEntries }: DashboardClientProps
             </select>
           </div>
 
-          <div className="filter-group" style={{ flex: "1 1 200px", maxWidth: "300px", marginLeft: "auto" }}>
+          <div className="filter-group" style={{ flex: "1 1 180px", maxWidth: "260px", marginLeft: "auto" }}>
             <span className="filter-label">Search Activity</span>
             <div style={{ position: "relative", width: "100%" }}>
               <Search size={14} style={{ position: "absolute", left: "0.75rem", top: "50%", transform: "translateY(-50%)", color: "var(--text-muted)" }} />
@@ -732,6 +856,29 @@ export default function DashboardClient({ initialEntries }: DashboardClientProps
               />
             </div>
           </div>
+
+          {isAnyFilterActive && (
+            <div style={{ display: "flex", alignItems: "flex-end" }}>
+              <button
+                className="btn"
+                onClick={resetAllFilters}
+                style={{
+                  fontSize: "0.75rem",
+                  padding: "0.45rem 0.75rem",
+                  color: "#ef4444",
+                  borderColor: "rgba(239, 68, 68, 0.4)",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "0.25rem",
+                  whiteSpace: "nowrap"
+                }}
+                title="Reset all search and date filters"
+              >
+                <X size={12} />
+                <span>Clear Filters</span>
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Entries Table */}
