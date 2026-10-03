@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { addWorkEntryAction, deleteWorkEntryAction, updateWorkEntryAction, addMultipleWorkEntriesAction, generateAIDescriptionAction } from "./actions/workActions";
+import { addWorkEntryAction, deleteWorkEntryAction, updateWorkEntryAction, addMultipleWorkEntriesAction, generateAIDescriptionAction, refineAllDescriptionsAction } from "./actions/workActions";
 import { Clock, DollarSign, Search, Trash2, Plus, Calendar, Briefcase, TrendingUp, Download, Mail, Edit2, Check, X, Layers, Filter, FileText, Sparkles, Sliders } from "lucide-react";
 
 interface WorkEntry {
@@ -24,6 +24,7 @@ export default function DashboardClient({ initialEntries }: DashboardClientProps
   const [formError, setFormError] = useState<string | null>(null);
   const [isAdding, setIsAdding] = useState(false);
   const [isGeneratingAI, setIsGeneratingAI] = useState(false);
+  const [isRefiningAll, setIsRefiningAll] = useState(false);
   const [massAddLoadingIndex, setMassAddLoadingIndex] = useState<number | null>(null);
 
   // Single Add Work Session Modal State
@@ -111,6 +112,33 @@ export default function DashboardClient({ initialEntries }: DashboardClientProps
       style: "currency",
       currency: "USD",
     }).format(value);
+  };
+
+  // AI Refine All Descriptions Handler
+  const handleRefineAll = async () => {
+    if (entries.length === 0) return;
+    setIsRefiningAll(true);
+    setFormError(null);
+
+    try {
+      const payload = entries.map((e) => ({ id: e.id, description: e.description }));
+      const res = await refineAllDescriptionsAction(payload);
+      if (res && res.error) {
+        setFormError(res.error);
+      } else if (res && res.updatedEntries) {
+        const updateMap = new Map(res.updatedEntries.map((item) => [item.id, item.description]));
+        setEntries((prev) =>
+          prev.map((e) => ({
+            ...e,
+            description: updateMap.get(e.id) || e.description
+          }))
+        );
+      }
+    } catch (err) {
+      setFormError("Failed to refine descriptions due to a network error.");
+    } finally {
+      setIsRefiningAll(false);
+    }
   };
 
   // 1. Single Add Entry handler
@@ -436,26 +464,30 @@ export default function DashboardClient({ initialEntries }: DashboardClientProps
 
   // Helper: check if a date falls in a time period
   const isInTimePeriod = (dateStr: string) => {
-    if (timePeriod === "all") return true;
+    if (!dateStr || timePeriod === "all") return true;
 
-    const date = new Date(dateStr + "T00:00:00");
+    const parts = dateStr.split("-");
+    if (parts.length < 3) return true;
+    const year = parseInt(parts[0], 10);
+    const month = parseInt(parts[1], 10) - 1; // 0-indexed
+
     const today = new Date();
     const currentYear = today.getFullYear();
     const currentMonth = today.getMonth(); // 0-indexed
 
     if (timePeriod === "this-month") {
-      return date.getFullYear() === currentYear && date.getMonth() === currentMonth;
+      return year === currentYear && month === currentMonth;
     }
     if (timePeriod === "last-month") {
       const targetMonth = currentMonth === 0 ? 11 : currentMonth - 1;
       const targetYear = currentMonth === 0 ? currentYear - 1 : currentYear;
-      return date.getFullYear() === targetYear && date.getMonth() === targetMonth;
+      return year === targetYear && month === targetMonth;
     }
     if (timePeriod === "this-year") {
-      return date.getFullYear() === currentYear;
+      return year === currentYear;
     }
     if (timePeriod === "last-year") {
-      return date.getFullYear() === currentYear - 1;
+      return year === currentYear - 1;
     }
     return true;
   };
@@ -531,7 +563,17 @@ export default function DashboardClient({ initialEntries }: DashboardClientProps
             Scenic Work Tracker
           </p>
         </div>
-        <div style={{ display: "flex", gap: "0.75rem" }}>
+        <div style={{ display: "flex", gap: "0.75rem", flexWrap: "wrap" }}>
+          <button
+            className="btn btn-accent"
+            onClick={handleRefineAll}
+            disabled={isRefiningAll || entries.length === 0}
+            style={{ display: "flex", alignItems: "center", gap: "0.35rem", padding: "0.5rem 1rem", fontSize: "0.85rem" }}
+            title="Refine spelling, grammar, capitalization, and punctuation for all work logs"
+          >
+            <Sparkles size={14} className={isRefiningAll ? "animate-spin" : ""} />
+            <span>{isRefiningAll ? "Refining Logs..." : "Refine All Logs"}</span>
+          </button>
           <button className="btn btn-primary" onClick={() => setIsAddModalOpen(true)} style={{ display: "flex", alignItems: "center", gap: "0.35rem", padding: "0.5rem 1rem", fontSize: "0.85rem" }}>
             <Plus size={16} />
             <span>Log New Session</span>

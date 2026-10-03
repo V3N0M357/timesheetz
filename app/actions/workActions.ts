@@ -247,7 +247,6 @@ Do NOT include quotes, bullet points, or extra formatting. Return ONLY the descr
       }
     }
 
-    // Dynamic AI Variation Engine using QA Prompts Bank + Custom Prompt Modifiers
     let basePrompt = "";
     if (customPrompt.trim()) {
       basePrompt = customPrompt.trim();
@@ -259,7 +258,6 @@ Do NOT include quotes, bullet points, or extra formatting. Return ONLY the descr
     const prefix = VARIATION_PREFIXES[Math.floor(Math.random() * VARIATION_PREFIXES.length)];
     const suffix = VARIATION_SUFFIXES[Math.floor(Math.random() * VARIATION_SUFFIXES.length)];
 
-    // Capitalize & assemble slightly altered version each time
     let altered = basePrompt.charAt(0).toLowerCase() + basePrompt.slice(1);
     if (prefix.endsWith(": ")) {
       altered = prefix + basePrompt + suffix;
@@ -267,13 +265,120 @@ Do NOT include quotes, bullet points, or extra formatting. Return ONLY the descr
       altered = prefix + altered + suffix;
     }
 
-    // Clean up trailing double periods
     altered = altered.replace(/\.\./g, '.');
-
     return { description: altered };
 
   } catch (err) {
     console.error("AI Description error:", err);
     return { description: "Thoroughly tested navigation links and buttons across desktop and mobile viewports." };
+  }
+}
+
+export async function refineAllDescriptionsAction(entries: { id: string; description: string }[]) {
+  if (!Array.isArray(entries) || entries.length === 0) {
+    return { error: "No entries available to refine." };
+  }
+
+  try {
+    const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
+    const refinedMap: Record<string, string> = {};
+
+    if (apiKey) {
+      const itemsText = entries.map((e) => `[ID:${e.id}] ${e.description}`).join("\n");
+      const promptText = `You are a professional technical editor and copywriter.
+Below is a list of work log descriptions. Refine each one into clean, professional, grammatically correct English.
+Fix all typos, spelling errors, missing capitalizations, bad grammar, and missing punctuation (ensure proper sentence ending with period).
+Keep the original technical meaning intact.
+
+IMPORTANT: Return each result strictly on a separate line formatted as:
+[ID:exact_id] Refined description sentence.
+
+List to refine:
+${itemsText}`;
+
+      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: promptText }] }]
+        })
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        const outputText = data?.candidates?.[0]?.content?.parts?.[0]?.text || "";
+        const lines = outputText.split("\n");
+        for (const line of lines) {
+          const match = line.match(/^\[ID:(.+?)\]\s*(.+)$/);
+          if (match) {
+            const id = match[1].trim();
+            const text = match[2].trim();
+            if (id && text) {
+              refinedMap[id] = text;
+            }
+          }
+        }
+      }
+    }
+
+    const spellFixes: Record<string, string> = {
+      "develope": "develop",
+      "developed": "Developed",
+      "devlopment": "development",
+      "immediete": "immediate",
+      "asthetic": "aesthetic",
+      "reincorperation": "re-incorporation",
+      "compltely": "completely",
+      "stabalizes": "stabilizes",
+      "enbters": "enters",
+      "grammer": "grammar",
+      "capatlizations": "capitalizations",
+      "diofferent": "different",
+      "ctn": "CTN",
+      "api": "API",
+      "css": "CSS",
+      "java": "Java",
+      "javascript": "JavaScript",
+      "ui": "UI"
+    };
+
+    const updatedEntries: { id: string; description: string }[] = [];
+    const batchQueries = [];
+
+    for (const entry of entries) {
+      let newDesc = refinedMap[entry.id];
+      if (!newDesc) {
+        let text = entry.description.trim();
+        for (const [wrong, right] of Object.entries(spellFixes)) {
+          const regex = new RegExp(`\\b${wrong}\\b`, 'gi');
+          text = text.replace(regex, right);
+        }
+        if (text.length > 0) {
+          text = text.charAt(0).toUpperCase() + text.slice(1);
+        }
+        if (!text.endsWith('.') && !text.endsWith('!') && !text.endsWith('?')) {
+          text += '.';
+        }
+        newDesc = text;
+      }
+
+      updatedEntries.push({ id: entry.id, description: newDesc });
+
+      batchQueries.push({
+        sql: "UPDATE work_entries SET description = ? WHERE id = ?",
+        args: [newDesc, entry.id]
+      });
+    }
+
+    if (batchQueries.length > 0) {
+      await db.batch(batchQueries);
+    }
+
+    revalidatePath("/");
+    return { success: true, updatedEntries };
+
+  } catch (err: any) {
+    console.error("Refine descriptions error:", err);
+    return { error: "Failed to refine descriptions. " + (err?.message || "") };
   }
 }
