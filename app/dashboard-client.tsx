@@ -66,7 +66,7 @@ export default function DashboardClient({ initialEntries }: DashboardClientProps
   // Form states
   const [workDate, setWorkDate] = useState(getTodayDateString());
   const [hours, setHours] = useState("");
-  const [hourlyRate, setHourlyRate] = useState("");
+  const [hourlyRate, setHourlyRate] = useState("30");
   const [description, setDescription] = useState("");
 
   // Custom AI Prompt state
@@ -117,9 +117,32 @@ export default function DashboardClient({ initialEntries }: DashboardClientProps
   const handleAddEntry = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setFormError(null);
+
+    const targetDate = workDate || getTodayDateString();
+    const targetHours = hours.trim();
+    const targetRate = hourlyRate.trim() || "30";
+    const targetDesc = description.trim();
+
+    if (!targetDate || !targetHours || !targetDesc) {
+      setFormError("Please fill in hours worked and activity description.");
+      return;
+    }
+
+    const parsedHours = parseFloat(targetHours);
+    const parsedRate = parseFloat(targetRate);
+
+    if (isNaN(parsedHours) || parsedHours <= 0) {
+      setFormError("Hours worked must be a positive number.");
+      return;
+    }
+
     setIsAdding(true);
 
-    const formData = new FormData(e.currentTarget);
+    const formData = new FormData();
+    formData.append("work_date", targetDate);
+    formData.append("hours", targetHours);
+    formData.append("hourly_rate", targetRate);
+    formData.append("description", targetDesc);
 
     try {
       const res = await addWorkEntryAction(null, formData);
@@ -130,14 +153,13 @@ export default function DashboardClient({ initialEntries }: DashboardClientProps
         if (res && res.entry) {
           setEntries((prev) => [res.entry, ...prev]);
         } else {
-          // Fallback UI update
           const newEntry: WorkEntry = {
             id: Math.random().toString(),
             user_id: "default-user",
-            work_date: formData.get("work_date") as string,
-            hours: parseFloat(formData.get("hours") as string),
-            hourly_rate: parseFloat(formData.get("hourly_rate") as string),
-            description: formData.get("description") as string,
+            work_date: targetDate,
+            hours: parsedHours,
+            hourly_rate: parsedRate,
+            description: targetDesc,
             created_at: new Date().toISOString(),
           };
           setEntries((prev) => [newEntry, ...prev]);
@@ -498,9 +520,9 @@ export default function DashboardClient({ initialEntries }: DashboardClientProps
 
   return (
     <>
-      <div className="no-print" style={{ maxWidth: "1200px", margin: "0 auto", padding: "2rem 1.5rem" }}>
+      <div className="no-print" style={{ maxWidth: "1200px", margin: "0 auto", padding: "1rem 1.25rem" }}>
       {/* Header Panel */}
-      <header className="glass-panel animate-fade-in" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "1.25rem 2rem", marginBottom: "2rem" }}>
+      <header className="glass-panel animate-fade-in" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "1.25rem 2rem", marginBottom: "1.25rem" }}>
         <div>
           <h1 style={{ fontSize: "1.25rem", fontWeight: "700", color: "var(--text-main)" }}>
             Timesheetz
