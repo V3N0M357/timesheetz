@@ -649,7 +649,7 @@ export default function DashboardClient({ initialEntries }: DashboardClientProps
 
   return (
     <>
-      <div className="no-print" style={{ maxWidth: "1200px", margin: "0 auto", padding: "1rem 1.25rem" }}>
+      <div className="no-print" style={{ maxWidth: "1200px", margin: "0 auto", padding: "0.5rem 1.25rem 1.5rem 1.25rem" }}>
       {/* Header Panel */}
       <header className="glass-panel animate-fade-in" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "1.25rem 2rem", marginBottom: "1.25rem" }}>
         <div>
