@@ -3,6 +3,7 @@
 import { db } from "@/src/db/client";
 import { revalidatePath } from "next/cache";
 import crypto from "crypto";
+import { parseSchedulingRules, AutoFillRulesInput } from "@/src/lib/schedulingRules";
 
 const QA_PROMPT_BANK = [
   // Functionality testing
@@ -440,7 +441,8 @@ export async function autoFillMonthAction(
   monthStr: string,
   targetEarnings: number,
   hourlyRateInput: number = 30,
-  customPrompt: string = ""
+  customPrompt: string = "",
+  rulesInput?: AutoFillRulesInput | string
 ) {
   const userId = "default-user";
   if (!monthStr || !monthStr.includes("-")) {
@@ -456,71 +458,201 @@ export async function autoFillMonthAction(
   const month = parseInt(monthNumStr, 10);
 
   try {
-    // 1. Clear existing entries for that month
-    await db.execute({
-      sql: `DELETE FROM work_entries WHERE work_date LIKE ?`,
-      args: [`${monthStr}%`]
-    });
+    // 1. Parse natural language & structured scheduling rules
+    const parsedRules = parseSchedulingRules(rulesInput);
+    let effectivePrompt = customPrompt;
 
-    // 2. Find weekdays in the month (Mon-Fri)
-    const daysInMonth = new Date(year, month, 0).getDate();
-    const weekdays: string[] = [];
-    for (let d = 1; d <= daysInMonth; d++) {
-      const dateObj = new Date(year, month - 1, d);
-      const dayOfWeek = dateObj.getDay();
-      if (dayOfWeek >= 1 && dayOfWeek <= 5) {
-        const yyyy = dateObj.getFullYear();
-        const mm = String(dateObj.getMonth() + 1).padStart(2, "0");
-        const dd = String(dateObj.getDate()).padStart(2, "0");
-        weekdays.push(`${yyyy}-${mm}-${dd}`);
+    // Optional AI enhancement if Gemini API key is present
+    const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
+    if (apiKey && parsedRules.rulesText && parsedRules.rulesText.length > 5) {
+      try {
+        const promptText = `A user wants to auto-fill work timesheet hours with custom rules.
+Rules: "${parsedRules.rulesText}"
+Target Month: "${monthStr}"
+
+Extract and return ONLY a JSON object:
+{
+  "allowedDays": [0, 6],
+  "maxWeekendHours": 8,
+  "maxWeekdayHours": 6,
+  "generalMaxHours": 8,
+  "minHours": 0.5,
+  "workFocus": ""
+}
+Note: 0=Sunday, 1=Monday, 2=Tuesday, 3=Wednesday, 4=Thursday, 5=Friday, 6=Saturday. If user says "school on weekdays so only sat and sun" or "weekends only", return [0, 6]. If "weekdays only", return [1, 2, 3, 4, 5].
+Do not include markdown or backticks, return only valid raw JSON.`;
+
+        const aiRes = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ contents: [{ parts: [{ text: promptText }] }] }),
+            signal: AbortSignal.timeout(3500),
+          }
+        );
+        if (aiRes.ok) {
+          const aiData = await aiRes.json();
+          const rawText = aiData?.candidates?.[0]?.content?.parts?.[0]?.text
+            ?.replace(/```json/g, "")
+            ?.replace(/```/g, "")
+            ?.trim();
+          if (rawText) {
+            const parsedAI = JSON.parse(rawText);
+            if (Array.isArray(parsedAI.allowedDays) && parsedAI.allowedDays.length > 0) {
+              parsedRules.allowedDays = parsedAI.allowedDays;
+            }
+            if (typeof parsedAI.maxWeekendHours === "number" && parsedAI.maxWeekendHours > 0) {
+              parsedRules.maxWeekendHours = parsedAI.maxWeekendHours;
+            }
+            if (typeof parsedAI.maxWeekdayHours === "number" && parsedAI.maxWeekdayHours > 0) {
+              parsedRules.maxWeekdayHours = parsedAI.maxWeekdayHours;
+            }
+            if (typeof parsedAI.generalMaxHours === "number" && parsedAI.generalMaxHours > 0) {
+              parsedRules.generalMaxHours = parsedAI.generalMaxHours;
+            }
+            if (typeof parsedAI.minHours === "number" && parsedAI.minHours > 0) {
+              parsedRules.minHours = parsedAI.minHours;
+            }
+            if (parsedAI.workFocus && !customPrompt) {
+              effectivePrompt = parsedAI.workFocus;
+            }
+          }
+        }
+      } catch (e) {
+        // Fallback safely to deterministic parsedRules
       }
     }
 
-    if (weekdays.length === 0) {
-      return { error: "No valid weekdays found in selected month" };
+    // 2. Find eligible days in the month matching allowedDays
+    const daysInMonth = new Date(year, month, 0).getDate();
+    const eligibleDates: Array<{
+      date: string;
+      dayOfWeek: number;
+      isWeekend: boolean;
+      maxHalfHours: number;
+    }> = [];
+
+    for (let d = 1; d <= daysInMonth; d++) {
+      const dateObj = new Date(year, month - 1, d);
+      const dayOfWeek = dateObj.getDay();
+      if (parsedRules.allowedDays.includes(dayOfWeek)) {
+        const yyyy = dateObj.getFullYear();
+        const mm = String(dateObj.getMonth() + 1).padStart(2, "0");
+        const dd = String(dateObj.getDate()).padStart(2, "0");
+        const dateStr = `${yyyy}-${mm}-${dd}`;
+
+        if (parsedRules.excludedDates && parsedRules.excludedDates.includes(dateStr)) {
+          continue;
+        }
+
+        const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
+        const maxHoursForDay = isWeekend ? parsedRules.maxWeekendHours : parsedRules.maxWeekdayHours;
+        eligibleDates.push({
+          date: dateStr,
+          dayOfWeek,
+          isWeekend,
+          maxHalfHours: Math.max(1, Math.round(maxHoursForDay * 2)),
+        });
+      }
+    }
+
+    if (eligibleDates.length === 0) {
+      const dayNames = parsedRules.allowedDays
+        .map((d) => ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"][d])
+        .join(", ");
+      return {
+        error: `No days matching rules (${dayNames}) were found in ${monthStr}. Please adjust allowed days.`,
+      };
     }
 
     // 3. Convert target earnings into 0.5-hour blocks (each block = 0.5h)
     let targetHalfHours = Math.round((targetEarnings / hourlyRate) * 2);
     if (targetHalfHours < 1) targetHalfHours = 1;
 
-    let remainingHalfHours = targetHalfHours;
-    const sessions: { date: string; hours: number; rate: number }[] = [];
-    const availableDays = [...weekdays].sort(() => Math.random() - 0.5);
-
-    let dayIdx = 0;
-    while (remainingHalfHours > 0 && dayIdx < availableDays.length) {
-      const dateStr = availableDays[dayIdx++];
-
-      let chosenHalfHours = 0;
-      if (remainingHalfHours <= 12) { // 12 half-hours = 6.0 hours max per day
-        chosenHalfHours = remainingHalfHours;
-      } else {
-        // Pick random session length between 1.5h (3 blocks) and 6.0h (12 blocks)
-        const possibleBlocks = [3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
-        chosenHalfHours = possibleBlocks[Math.floor(Math.random() * possibleBlocks.length)];
-      }
-
-      remainingHalfHours -= chosenHalfHours;
-      const hours = chosenHalfHours * 0.5;
-
-      sessions.push({ date: dateStr, hours, rate: hourlyRate });
+    // Check capacity against user's max hour limits
+    const totalCapacityHalfHours = eligibleDates.reduce((acc, d) => acc + d.maxHalfHours, 0);
+    if (targetHalfHours > totalCapacityHalfHours) {
+      const maxHours = totalCapacityHalfHours * 0.5;
+      const maxEarnings = maxHours * hourlyRate;
+      const ruleDaysLabel =
+        parsedRules.allowedDays.length === 2 &&
+        parsedRules.allowedDays.includes(0) &&
+        parsedRules.allowedDays.includes(6)
+          ? "Sat & Sun only (weekends)"
+          : `${eligibleDates.length} eligible days`;
+      return {
+        error: `Target of $${targetEarnings} requires ${(targetHalfHours * 0.5).toFixed(1)}h, but with rules (${ruleDaysLabel}, capped at ${Math.max(parsedRules.maxWeekendHours, parsedRules.maxWeekdayHours)}h/day), the maximum possible is $${maxEarnings.toFixed(2)} (${maxHours.toFixed(1)}h). Please increase allowed days or reduce target earnings.`,
+      };
     }
 
-    // Sort sessions by date ascending
-    sessions.sort((a, b) => a.date.localeCompare(b.date));
+    // 4. Clear existing entries for that month
+    await db.execute({
+      sql: `DELETE FROM work_entries WHERE work_date LIKE ?`,
+      args: [`${monthStr}%`],
+    });
 
-    // 4. Generate AI descriptions matching each session's exact hours
-    const pastDescs = sessions.map(s => `Session ${s.hours} hours`);
+    // 5. Smart realistic distribution of sessions across eligible days
+    const minHalfHours = Math.max(1, Math.round(parsedRules.minHours * 2));
+    const maxDayCapacity = Math.max(...eligibleDates.map((d) => d.maxHalfHours));
+    const minDaysNeeded = Math.ceil(targetHalfHours / maxDayCapacity);
+
+    let chosenDays = [...eligibleDates];
+    if (minDaysNeeded < eligibleDates.length && targetHalfHours / eligibleDates.length < minHalfHours) {
+      const numDaysToPick = Math.max(minDaysNeeded, Math.floor(targetHalfHours / minHalfHours));
+      const step = eligibleDates.length / numDaysToPick;
+      chosenDays = [];
+      for (let i = 0; i < numDaysToPick; i++) {
+        chosenDays.push(eligibleDates[Math.floor(i * step)]);
+      }
+    }
+
+    // Initialize chosen days with base hours
+    const allocation = chosenDays.map((d) => ({ ...d, halfHours: minHalfHours }));
+    let remainingHalfHours = targetHalfHours - minHalfHours * chosenDays.length;
+
+    // Distribute remaining half hours randomly within individual day caps
+    while (remainingHalfHours > 0) {
+      const available = allocation.filter((d) => d.halfHours < d.maxHalfHours);
+      if (available.length === 0) break;
+      const pick = available[Math.floor(Math.random() * available.length)];
+      const stepToAdd = Math.min(
+        remainingHalfHours,
+        pick.maxHalfHours - pick.halfHours,
+        Math.random() > 0.45 ? 2 : 1
+      );
+      pick.halfHours += stepToAdd;
+      remainingHalfHours -= stepToAdd;
+    }
+
+    // Format final sessions
+    const sessions = allocation
+      .filter((d) => d.halfHours > 0)
+      .map((d) => ({
+        date: d.date,
+        hours: d.halfHours * 0.5,
+        rate: hourlyRate,
+      }))
+      .sort((a, b) => a.date.localeCompare(b.date));
+
+    // 6. Generate AI descriptions matching each session's exact hours
+    const pastDescs = sessions.map((s) => `Session ${s.hours} hours`);
     const generatedEntries = [];
     const batchQueries = [];
 
-    for (const s of sessions) {
+    // Parallel description generation
+    const descPromises = sessions.map((s) =>
+      generateAIDescriptionAction(pastDescs, effectivePrompt, s.hours)
+    );
+    const descResults = await Promise.all(descPromises);
+
+    for (let i = 0; i < sessions.length; i++) {
+      const s = sessions[i];
       const id = crypto.randomUUID();
       const createdAt = new Date().toISOString();
-      
-      const aiRes = await generateAIDescriptionAction(pastDescs, customPrompt, s.hours);
-      const description = aiRes?.description || `Executed ${s.hours} hours of QA testing and bug verification.`;
+      const description =
+        descResults[i]?.description ||
+        `Executed ${s.hours} hours of QA testing, responsive verification, and bug triage.`;
 
       generatedEntries.push({
         id,
@@ -529,12 +661,12 @@ export async function autoFillMonthAction(
         hours: s.hours,
         hourly_rate: s.rate,
         description,
-        created_at: createdAt
+        created_at: createdAt,
       });
 
       batchQueries.push({
         sql: `INSERT INTO work_entries (id, user_id, work_date, hours, hourly_rate, description, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)`,
-        args: [id, userId, s.date, s.hours, s.rate, description, createdAt]
+        args: [id, userId, s.date, s.hours, s.rate, description, createdAt],
       });
     }
 
@@ -543,8 +675,7 @@ export async function autoFillMonthAction(
     }
 
     revalidatePath("/");
-    return { success: true, entries: generatedEntries };
-
+    return { success: true, entries: generatedEntries, rulesApplied: parsedRules };
   } catch (err: any) {
     console.error("Auto-fill month error:", err);
     return { error: "Failed to auto-fill month. " + (err?.message || "") };

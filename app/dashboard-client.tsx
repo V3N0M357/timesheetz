@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { addWorkEntryAction, deleteWorkEntryAction, updateWorkEntryAction, addMultipleWorkEntriesAction, generateAIDescriptionAction, refineAllDescriptionsAction, autoFillMonthAction } from "./actions/workActions";
+import { RULE_PRESETS, parseSchedulingRules, formatRulesSummary, AutoFillRulesInput } from "@/src/lib/schedulingRules";
 import { Clock, DollarSign, Search, Trash2, Plus, Calendar, Briefcase, TrendingUp, Download, Mail, Edit2, Check, X, Layers, Filter, FileText, Sparkles, Sliders, Wand, Printer } from "lucide-react";
 
 interface WorkEntry {
@@ -48,14 +49,63 @@ export default function DashboardClient({ initialEntries }: DashboardClientProps
   const [massAddError, setMassAddError] = useState<string | null>(null);
   const [isBatchSaving, setIsBatchSaving] = useState(false);
 
-  // Auto-Fill Month Modal State
+  // Auto-Fill Month Modal State & Scheduling Rules
   const [isAutoFillOpen, setIsAutoFillOpen] = useState(false);
   const [autoFillMonth, setAutoFillMonth] = useState("2026-09");
   const [autoFillTarget, setAutoFillTarget] = useState("1500");
   const [autoFillRate, setAutoFillRate] = useState("30");
   const [autoFillPrompt, setAutoFillPrompt] = useState("");
+  const [autoFillRulesText, setAutoFillRulesText] = useState("");
+  const [autoFillDays, setAutoFillDays] = useState<number[]>([1, 2, 3, 4, 5]);
+  const [autoFillMaxWeekend, setAutoFillMaxWeekend] = useState("8");
+  const [autoFillMaxWeekday, setAutoFillMaxWeekday] = useState("6");
+  const [autoFillShowDetails, setAutoFillShowDetails] = useState(false);
   const [isAutoFilling, setIsAutoFilling] = useState(false);
   const [autoFillError, setAutoFillError] = useState<string | null>(null);
+
+  // Helper to handle typing natural language rules
+  const handleRulesTextChange = (text: string) => {
+    setAutoFillRulesText(text);
+    if (text.trim().length > 3) {
+      const parsed = parseSchedulingRules(text);
+      setAutoFillDays(parsed.allowedDays);
+      setAutoFillMaxWeekend(parsed.maxWeekendHours.toString());
+      setAutoFillMaxWeekday(parsed.maxWeekdayHours.toString());
+    }
+  };
+
+  const handleApplyPreset = (presetId: string) => {
+    const preset = RULE_PRESETS.find((p) => p.id === presetId);
+    if (preset) {
+      setAutoFillRulesText(preset.text);
+      setAutoFillDays(preset.allowedDays);
+      setAutoFillMaxWeekend(preset.maxWeekendHours.toString());
+      setAutoFillMaxWeekday(preset.maxWeekdayHours.toString());
+    }
+  };
+
+  const handleToggleDay = (dayIndex: number) => {
+    if (autoFillDays.includes(dayIndex)) {
+      if (autoFillDays.length > 1) {
+        setAutoFillDays(autoFillDays.filter((d) => d !== dayIndex));
+      }
+    } else {
+      setAutoFillDays([...autoFillDays, dayIndex].sort());
+    }
+  };
+
+  const handleSetDayGroup = (group: "weekdays" | "weekends" | "all") => {
+    if (group === "weekdays") {
+      setAutoFillDays([1, 2, 3, 4, 5]);
+      if (!autoFillRulesText) setAutoFillRulesText("Weekdays only (Monday to Friday), max 6 hours per day.");
+    } else if (group === "weekends") {
+      setAutoFillDays([0, 6]);
+      if (!autoFillRulesText) setAutoFillRulesText("School on weekdays, so I can only work Sat and Sun. Maximum of 8 hours on weekends.");
+    } else {
+      setAutoFillDays([0, 1, 2, 3, 4, 5, 6]);
+      if (!autoFillRulesText) setAutoFillRulesText("Available all 7 days, maximum 8 hours per session.");
+    }
+  };
 
   // Specific PDF Modal State
   const [isPDFModalOpen, setIsPDFModalOpen] = useState(false);
@@ -178,7 +228,21 @@ export default function DashboardClient({ initialEntries }: DashboardClientProps
     setIsAutoFilling(true);
 
     try {
-      const res = await autoFillMonthAction(autoFillMonth, targetVal, rateVal, autoFillPrompt);
+      const rulesPayload: AutoFillRulesInput = {
+        rulesText: autoFillRulesText,
+        allowedDays: autoFillDays,
+        maxWeekendHours: parseFloat(autoFillMaxWeekend) || 8,
+        maxWeekdayHours: parseFloat(autoFillMaxWeekday) || 6,
+        minHours: 0.5,
+      };
+
+      const res = await autoFillMonthAction(
+        autoFillMonth,
+        targetVal,
+        rateVal,
+        autoFillPrompt,
+        rulesPayload
+      );
       if (res && res.error) {
         setAutoFillError(res.error);
         setIsAutoFilling(false);
@@ -1506,13 +1570,17 @@ export default function DashboardClient({ initialEntries }: DashboardClientProps
                   className="input-field"
                   style={{ padding: "0.65rem" }}
                 >
-                  <option value="2026-10">October 2026 (Current Month)</option>
+                  <option value="2026-11">November 2026 (Current Month)</option>
+                  <option value="2026-10">October 2026</option>
                   <option value="2026-09">September 2026</option>
                   <option value="2026-08">August 2026</option>
                   <option value="2026-07">July 2026</option>
                   <option value="2026-06">June 2026</option>
                   <option value="2026-05">May 2026</option>
                   <option value="2026-04">April 2026</option>
+                  <option value="2026-03">March 2026</option>
+                  <option value="2026-02">February 2026</option>
+                  <option value="2026-01">January 2026</option>
                 </select>
               </div>
 
@@ -1552,6 +1620,152 @@ export default function DashboardClient({ initialEntries }: DashboardClientProps
                 </div>
               </div>
 
+              {/* Natural Language Scheduling Rules */}
+              <div className="form-group">
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.4rem" }}>
+                  <label className="form-label" style={{ marginBottom: 0 }}>
+                    Scheduling Rules & Constraints
+                  </label>
+                  <span style={{ fontSize: "0.75rem", color: "var(--primary)", fontWeight: "600" }}>
+                    ✨ AI Natural Language Rules
+                  </span>
+                </div>
+                <textarea
+                  rows={2}
+                  placeholder='e.g. "I had school on the weekdays, so I can only work Sat and Sun. Maximum of 8 hours on weekends."'
+                  value={autoFillRulesText}
+                  onChange={(e) => handleRulesTextChange(e.target.value)}
+                  className="input-field"
+                  style={{ resize: "vertical", fontFamily: "inherit", fontSize: "0.85rem", lineHeight: "1.4" }}
+                />
+
+                {/* Quick Presets */}
+                <div style={{ display: "flex", gap: "0.4rem", flexWrap: "wrap", marginTop: "0.45rem" }}>
+                  {RULE_PRESETS.map((preset) => (
+                    <button
+                      key={preset.id}
+                      type="button"
+                      onClick={() => handleApplyPreset(preset.id)}
+                      className="btn"
+                      style={{
+                        padding: "0.25rem 0.55rem",
+                        fontSize: "0.75rem",
+                        borderRadius: "20px",
+                        border: "1px solid rgba(163, 230, 53, 0.3)",
+                        background: "rgba(163, 230, 53, 0.06)",
+                        color: "var(--text-main)",
+                        cursor: "pointer",
+                      }}
+                    >
+                      {preset.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Interactive Day & Hours Selection */}
+              <div
+                style={{
+                  background: "rgba(255, 255, 255, 0.03)",
+                  border: "1px solid var(--border)",
+                  borderRadius: "10px",
+                  padding: "0.85rem 1rem",
+                }}
+              >
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.6rem" }}>
+                  <span style={{ fontSize: "0.8rem", fontWeight: "600", color: "var(--text-main)" }}>
+                    Allowed Work Days:
+                  </span>
+                  <div style={{ display: "flex", gap: "0.3rem" }}>
+                    <button
+                      type="button"
+                      onClick={() => handleSetDayGroup("weekdays")}
+                      className="btn"
+                      style={{ padding: "0.2rem 0.5rem", fontSize: "0.72rem", borderRadius: "4px" }}
+                    >
+                      Weekdays
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleSetDayGroup("weekends")}
+                      className="btn"
+                      style={{ padding: "0.2rem 0.5rem", fontSize: "0.72rem", borderRadius: "4px" }}
+                    >
+                      Weekends
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleSetDayGroup("all")}
+                      className="btn"
+                      style={{ padding: "0.2rem 0.5rem", fontSize: "0.72rem", borderRadius: "4px" }}
+                    >
+                      All Days
+                    </button>
+                  </div>
+                </div>
+
+                {/* Day Buttons */}
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: "0.35rem", marginBottom: "0.75rem" }}>
+                  {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((dayName, idx) => {
+                    const isSelected = autoFillDays.includes(idx);
+                    return (
+                      <button
+                        key={dayName}
+                        type="button"
+                        onClick={() => handleToggleDay(idx)}
+                        style={{
+                          padding: "0.45rem 0",
+                          borderRadius: "6px",
+                          fontSize: "0.78rem",
+                          fontWeight: "700",
+                          textAlign: "center",
+                          border: isSelected ? "1.5px solid var(--primary)" : "1px solid rgba(255, 255, 255, 0.1)",
+                          background: isSelected ? "rgba(163, 230, 53, 0.16)" : "rgba(0, 0, 0, 0.25)",
+                          color: isSelected ? "var(--primary)" : "var(--text-muted)",
+                          cursor: "pointer",
+                          transition: "all 0.15s ease",
+                        }}
+                      >
+                        {dayName}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem" }}>
+                  <div className="form-group" style={{ marginBottom: 0 }}>
+                    <label className="form-label" style={{ fontSize: "0.72rem", marginBottom: "0.25rem" }}>
+                      Weekend Max Hours (Sat & Sun)
+                    </label>
+                    <input
+                      type="number"
+                      step="0.5"
+                      min="0.5"
+                      max="24"
+                      value={autoFillMaxWeekend}
+                      onChange={(e) => setAutoFillMaxWeekend(e.target.value)}
+                      className="input-field"
+                      style={{ padding: "0.45rem 0.65rem", fontSize: "0.85rem" }}
+                    />
+                  </div>
+                  <div className="form-group" style={{ marginBottom: 0 }}>
+                    <label className="form-label" style={{ fontSize: "0.72rem", marginBottom: "0.25rem" }}>
+                      Weekday Max Hours (Mon - Fri)
+                    </label>
+                    <input
+                      type="number"
+                      step="0.5"
+                      min="0.5"
+                      max="24"
+                      value={autoFillMaxWeekday}
+                      onChange={(e) => setAutoFillMaxWeekday(e.target.value)}
+                      className="input-field"
+                      style={{ padding: "0.45rem 0.65rem", fontSize: "0.85rem" }}
+                    />
+                  </div>
+                </div>
+              </div>
+
               <div className="form-group">
                 <label className="form-label">AI Work Focus / Domain (Optional)</label>
                 <input
@@ -1563,8 +1777,27 @@ export default function DashboardClient({ initialEntries }: DashboardClientProps
                 />
               </div>
 
-              <div style={{ padding: "0.85rem 1rem", borderRadius: "10px", background: "rgba(163, 230, 53, 0.08)", border: "1px solid rgba(163, 230, 53, 0.2)", fontSize: "0.8rem", color: "var(--text-muted)" }}>
-                💡 <strong>Smart Constraints</strong>: Sessions are automatically distributed across weekdays (Mon-Fri) with lengths strictly between <strong>0.5 hrs and 6.0 hrs</strong>. Each session gets an AI-generated description matched to its exact duration.
+              {/* Dynamic Live Rules Summary */}
+              <div
+                style={{
+                  padding: "0.75rem 1rem",
+                  borderRadius: "10px",
+                  background: "rgba(163, 230, 53, 0.08)",
+                  border: "1px solid rgba(163, 230, 53, 0.2)",
+                  fontSize: "0.8rem",
+                  color: "var(--text-muted)",
+                }}
+              >
+                💡 <strong>Active Rules</strong>:{" "}
+                {formatRulesSummary({
+                  allowedDays: autoFillDays,
+                  maxWeekendHours: parseFloat(autoFillMaxWeekend) || 8,
+                  maxWeekdayHours: parseFloat(autoFillMaxWeekday) || 6,
+                  generalMaxHours: 8,
+                  minHours: 0.5,
+                  excludedDates: [],
+                  rulesText: autoFillRulesText,
+                })}
               </div>
 
               <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.75rem", marginTop: "0.5rem" }}>
